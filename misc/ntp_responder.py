@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Svarar på Aliyuns MQTT NTP-begäranden."""
+"""Responds to Aliyun MQTT NTP requests."""
 
 import argparse
 import json
@@ -79,13 +79,13 @@ def main():
 
     while True:
         try:
-            print("[ntp_responder] ansluter till %s:%d ..." % (broker, args.port))
+            print("[ntp_responder] connecting to %s:%d ..." % (broker, args.port))
             client.connect(broker, args.port, 60)
             break
         except OSError as e:
             print(
-                "[ntp_responder] kan inte na %s:%d (%s) -"
-                " provar igen om 5 s. Ctrl-C avbryter." % (broker, args.port, e)
+                "[ntp_responder] cannot reach %s:%d (%s) -"
+                " retrying in 5 s. Ctrl-C to cancel." % (broker, args.port, e)
             )
             time.sleep(5)
     client.loop_forever()

@@ -1,4 +1,4 @@
-"""Kopplar QR-knappen till appendQrRow i ULockTestActivity."""
+"""Connects the QR button to appendQrRow in ULockTestActivity."""
 
 import os
 
@@ -40,25 +40,25 @@ def patch_add_qr_button(act_path, strings_path, write):
     t0 = open(act_path, encoding="utf-8").read()
 
     if "appendQrRow" in t0:
-        print("   appendQrRow finns redan, hoppar over")
+        print("   appendQrRow already exists, skipping")
         return
 
     anchor = ".method protected onActivityResult(IILandroid/content/Intent;)V"
     if anchor not in t0:
-        raise SystemExit("ULockTestActivity: hittar inte onActivityResult")
+        raise SystemExit("ULockTestActivity: could not find onActivityResult")
 
     helper = open(HELPER, encoding="utf-8").read()
     t = t0.replace(anchor, helper + anchor, 1)
 
     if OLD_COND3 not in t:
-        raise SystemExit("ULockTestActivity: hittar inte cond_3-grenen")
+        raise SystemExit("ULockTestActivity: could not find the cond_3 branch")
     t = t.replace(OLD_COND3, NEW_COND3)
 
     write(act_path, t)
-    print("patchad:", act_path, "(ADD QR TO CSV -> appendQrRow)")
+    print("patched:", act_path, "(ADD QR TO CSV -> appendQrRow)")
 
     s0 = open(strings_path, encoding="utf-8").read()
     if OLD_STR not in s0:
-        raise SystemExit("strings.xml: hittar inte tool_scan_qr")
+        raise SystemExit("strings.xml: could not find tool_scan_qr")
     write(strings_path, s0.replace(OLD_STR, NEW_STR))
-    print("patchad:", strings_path, "(knapptext -> ADD QR TO CSV)")
+    print("patched:", strings_path, "(button text -> ADD QR TO CSV)")

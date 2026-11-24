@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""BLE-klient för Omni-lås. Kräver dbus-python och PyGObject."""
+"""BLE client for Omni locks. Requires dbus-python and PyGObject."""
 
 import argparse
 import sys
@@ -71,11 +71,11 @@ def parse(value: bytes):
             break
         i3 += 1
     if i == 0:
-        return None, "ingen A3 A4-ram"
+        return None, "no A3 A4 frame"
     fr = value[i3 : i3 + i]
     body = fr[:-1]
     if crc8(body) != fr[-1]:
-        return None, f"CRC8 fel (beraknad {crc8(body):02X}, i ramen {fr[-1]:02X})"
+        return None, f"CRC8 error (calculated {crc8(body):02X}, frame has {fr[-1]:02X})"
     b = (fr[3] - 50) & 0xFF
     dec = bytearray(body)
     dec[3] = b
@@ -123,20 +123,20 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager"
     )
 
-    print(f"[1] letar efter {name!r} pa {adapter} ...")
+    print(f"[1] Scanning for {name!r} on {adapter} ...")
 
     try:
         adapter_iface.SetDiscoveryFilter({"Transport": "le"})
     except dbus.exceptions.DBusException as e:
-        print(f"    (kunde inte satta LE-filter: {e.get_dbus_name()})")
+        print(f"    (could not set LE filter: {e.get_dbus_name()})")
     try:
         adapter_iface.StartDiscovery()
     except dbus.exceptions.DBusException as e:
         nm = e.get_dbus_name()
         if "InProgress" in nm or "Already" in nm:
-            print("    (skanning pagar redan)")
+            print("    (scan already in progress)")
         else:
-            print(f"    StartDiscovery misslyckades: {nm}")
+            print(f"    StartDiscovery failed: {nm}")
             return 1
 
     dev_path = None
@@ -150,7 +150,7 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
             dname = str(p.get("Name", ""))
             if alias == name or dname == name:
                 dev_path = str(path)
-                print(f"    hittade {alias!r} pa {path}")
+                print(f"    found {alias!r} at {path}")
                 break
         if dev_path is None:
             pump(0.5)
@@ -159,10 +159,10 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
     except dbus.exceptions.DBusException:
         pass
     if dev_path is None:
-        print(f"    hittade inte {name!r} inom {scan_timeout}s")
+        print(f"    did not find {name!r} within {scan_timeout}s")
         return 1
 
-    print("[2] ansluter ...")
+    print("[2] Connecting ...")
 
     def try_connect(path, label):
         obj = bus.get_object("org.bluez", path)
@@ -181,13 +181,13 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
 
     dev = None
     try:
-        dev = try_connect(dev_path, "forsok 1")
+        dev = try_connect(dev_path, "attempt 1")
     except dbus.exceptions.DBusException as e:
         nm = e.get_dbus_name()
-        print(f"    misslyckades: {nm}")
+        print(f"    failed: {nm}")
         if "page-timeout" in str(e) or "Failed" in nm or "key-missing" in str(e):
 
-            print("    skannar om med LE-filter och forsoker igen ...")
+            print("    rescanning with LE filter and retrying ...")
             try:
                 adapter_iface.SetDiscoveryFilter({"Transport": "le"})
             except dbus.exceptions.DBusException:
@@ -213,15 +213,15 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
             except dbus.exceptions.DBusException:
                 pass
             if dev_path is None:
-                print("    hittade den inte igen - kor fake_lock pa andra maskinen?")
+                print("    could not find it again - is fake_lock running on the other machine?")
                 return 1
-            print(f"    hittade pa nytt: {dev_path}")
+            print(f"    rediscovered: {dev_path}")
             try:
-                dev = try_connect(dev_path, "forsok 2")
+                dev = try_connect(dev_path, "attempt 2")
             except dbus.exceptions.DBusException as e2:
-                print(f"    misslyckades igen: {e2.get_dbus_name()}")
+                print(f"    failed again: {e2.get_dbus_name()}")
                 print(
-                    "    Kontrollera att fake_lock visar '[4] annonserar' och ar i rakvidd."
+                    "    Make sure fake_lock shows '[4] advertising' and is within range."
                 )
                 return 1
     if dev is None:
@@ -242,11 +242,11 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         if write_path is None or notify_path is None:
             pump(0.5)
     if write_path is None or notify_path is None:
-        print("    hittade inte tjanstens karakteristiker - ar enheten fake_lock?")
+        print("    could not find the service characteristics - is the device running fake_lock?")
         dev.Disconnect()
         return 1
 
-    print("[3] prenumererar pa notify")
+    print("[3] Subscribing to notifications")
     notify = dbus.Interface(
         bus.get_object("org.bluez", notify_path), "org.bluez.GattCharacteristic1"
     )
@@ -275,7 +275,7 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
 
     def send(order, payload, label):
         frame = build(order, payload, session["key"])
-        print(f"    -> skickar order={order} ({label}) {frame.hex()}")
+        print(f"    -> sending order={order} ({label}) {frame.hex()}")
         write.WriteValue(
             dbus.Array(frame, signature="y"), dbus.Dictionary({}, signature="sv")
         )
@@ -285,44 +285,44 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
                 value = inbox.pop(0)
                 o, dec = parse(value)
                 if o is None:
-                    print(f"       <svar som inte gick att avkoda: {dec}>")
+                    print(f"       <reply could not be decoded: {dec}>")
                     continue
                 ln = dec[2]
                 pl = dec[6 : 6 + ln]
                 print(
-                    f"       <- svar order={o} status={dec[6]} nyckel=0x{dec[4]:02X} "
+                    f"       <- reply order={o} status={dec[6]} key=0x{dec[4]:02X} "
                     f"payload={pl.hex()}"
                 )
                 return o, dec
             pump(0.05)
-        print(f"       (inget svar inom {reply_timeout}s)")
+        print(f"       (no reply within {reply_timeout}s)")
         return None, None
 
-    print(f"[4] handskakning med deviceKey {device_key!r}")
-    _, dec = send(ORDER_KEY, key_payload(device_key), "nyckelbegaran")
+    print(f"[4] Handshake with deviceKey {device_key!r}")
+    _, dec = send(ORDER_KEY, key_payload(device_key), "key request")
     if dec is None:
-        print("    inget svar - avbryter")
+        print("    no reply - aborting")
         dev.Disconnect()
         return 1
     if dec[6] != 1:
-        print(f"    enheten nekade nyckeln (status={dec[6]})")
+        print(f"    device rejected the key (status={dec[6]})")
         dev.Disconnect()
         return 1
     session["key"] = dec[7]
-    print(f"    OK. sessionsnyckel = 0x{session['key']:02X}")
+    print(f"    OK. session key = 0x{session['key']:02X}")
 
     for action in actions:
         if action == "unlock":
-            send(ORDER_OPEN, open_payload(int(time.time())), "LAS UPP")
+            send(ORDER_OPEN, open_payload(int(time.time())), "UNLOCK")
         elif action == "lock":
-            send(ORDER_CLOSE, open_payload(int(time.time())), "LAS")
+            send(ORDER_CLOSE, open_payload(int(time.time())), "LOCK")
         elif action == "info":
-            send(ORDER_SCOOTER_INFO, bytes(8), "fordonsinfo")
+            send(ORDER_SCOOTER_INFO, bytes(8), "vehicle info")
         elif action == "status":
             send(ORDER_INFO, bytes(1), "status")
         time.sleep(0.3)
 
-    print("[5] kopplar ner")
+    print("[5] Disconnecting")
     try:
         notify.StopNotify()
     except Exception:
@@ -332,19 +332,19 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="BLE-central mot fake_lock.py")
-    ap.add_argument("--name", default="Segway IoT", help="enhetens annonserade namn")
-    ap.add_argument("--key", default="4BKNwi77", help="deviceKey att skicka")
+    ap = argparse.ArgumentParser(description="BLE central for fake_lock.py")
+    ap.add_argument("--name", default="Segway IoT", help="advertised device name")
+    ap.add_argument("--key", default="4BKNwi77", help="deviceKey to send")
     ap.add_argument("--adapter", default="hci0")
     ap.add_argument("--scan-timeout", type=float, default=20.0)
     ap.add_argument("--reply-timeout", type=float, default=5.0)
     ap.add_argument(
-        "--lock", action="store_true", help="las i stallet for att lasa upp"
+        "--lock", action="store_true", help="lock instead of unlocking"
     )
     ap.add_argument(
         "--all",
         action="store_true",
-        help="handskakning + upplas + las + fordonsinfo + status",
+        help="handshake + unlock + lock + vehicle info + status",
     )
     a = ap.parse_args()
 
@@ -359,8 +359,8 @@ def main():
         return run(a.name, a.key, a.adapter, actions, a.scan_timeout, a.reply_timeout)
     except ImportError:
         sys.exit(
-            "saknar dbus-python/PyGObject. Paket: python3-dbus python3-gi\n"
-            "Kor med systemets python3."
+            "missing dbus-python/PyGObject. Packages: python3-dbus python3-gi\n"
+            "Run with the system python3."
         )
 
 

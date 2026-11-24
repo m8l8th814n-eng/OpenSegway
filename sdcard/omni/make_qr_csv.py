@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genererar omni_qr.csv med IMEI, QR-kod och MAC-adress."""
+"""Generates omni_qr.csv with IMEI, QR code, and MAC address."""
 
 import argparse
 import sys
@@ -7,9 +7,9 @@ import sys
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--qr", help="QR-koden/ID (uppslagsnyckeln)")
-    ap.add_argument("--mac", help="MAC-adressen, t.ex. AA:BB:CC:DD:EE:FF")
-    ap.add_argument("--imei", default="0", help="IMEI (får vara 0)")
+    ap.add_argument("--qr", help="QR code/ID (lookup key)")
+    ap.add_argument("--mac", help="MAC address, e.g. AA:BB:CC:DD:EE:FF")
+    ap.add_argument("--imei", default="0", help="IMEI (may be 0)")
     a = ap.parse_args()
 
     if a.qr and a.mac:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""BLE-perifer som emulerar Omni-lås för tester med BleTool."""
+"""BLE peripheral that emulates an Omni lock for testing with BleTool."""
 
 import argparse
 import array
@@ -111,11 +111,11 @@ def a3a4_decode(value: bytes):
             break
         i3 += 1
     if i == 0:
-        return None, "ingen A3 A4-ram"
+        return None, "no A3 A4 frame"
     fr = value[i3 : i3 + i]
     body = fr[:-1]
     if crc8(body) != fr[-1]:
-        return None, f"CRC8 fel (beraknad {crc8(body):02X}, i ramen {fr[-1]:02X})"
+        return None, f"CRC8 error (calculated {crc8(body):02X}, frame has {fr[-1]:02X})"
     b = (fr[3] - 50) & 0xFF
     dec = bytearray(body)
     dec[3] = b
@@ -206,59 +206,59 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
         if order is not None:
             length = dec[2]
             payload = dec[6 : 6 + length]
-            print(f"        familj=A3A4  order={order}")
+            print(f"        family=A3A4  order={order}")
             if order == 1:
                 sent = payload.decode("utf-8", "replace").strip("\x00")
                 hit = sent.startswith(expected_key)
-                verdict = "MATCHAR" if hit else "MATCHAR INTE"
+                verdict = "MATCH" if hit else "MISMATCH"
                 print(
-                    f"        handskakning - appen skickade nyckeln {sent!r} [{verdict}]"
+                    f"        handshake - app sent key {sent!r} [{verdict}]"
                 )
                 reply = a3a4_reply(1, 1, session_key)
                 notify_holder["send"](reply)
                 print(
-                    f"        -> svarade status=1 nyckel=0x{session_key:02X} "
+                    f"        -> replied status=1 key=0x{session_key:02X} "
                     f"({reply.hex()})"
                 )
             elif order == 250:
 
                 reply = a3a4_reply(251, 1, session_key)
                 notify_holder["send"](reply)
-                print(f"        firmware-info-begaran -> svarade 0xFB ({reply.hex()})")
+                print(f"        firmware info request -> replied 0xFB ({reply.hex()})")
             else:
                 reply = a3a4_reply(order, 1, session_key)
                 notify_holder["send"](reply)
-                print(f"        -> svarade order={order} status=1 ({reply.hex()})")
+                print(f"        -> replied order={order} status=1 ({reply.hex()})")
             return
 
         order, payload = app_decode(data)
         if order is None:
-            print(f"        (okand ramfamilj: {dec})")
+            print(f"        (unknown frame family: {dec})")
             return
-        print(f"        familj=FE  order=0x{order:02X}")
+        print(f"        family=FE  order=0x{order:02X}")
         if order == ORDER_KEY:
             sent = (
                 payload[1:].decode("utf-8", "replace").strip("\x00")
                 if len(payload) > 1
                 else ""
             )
-            verdict = "MATCHAR" if sent.startswith(expected_key) else "MATCHAR INTE"
-            print(f"        nyckelbegaran - appen skickade {sent!r} [{verdict}]")
+            verdict = "MATCH" if sent.startswith(expected_key) else "MISMATCH"
+            print(f"        key request - app sent {sent!r} [{verdict}]")
             notify_holder["send"](device_frame(ORDER_KEY, bytes([session_key])))
-            print(f"        -> svarade 0x11 med sessionsnyckel 0x{session_key:02X}")
+            print(f"        -> replied 0x11 with session key 0x{session_key:02X}")
         elif order == ORDER_UNLOCK:
-            print("        LAS UPP")
+            print("        UNLOCK")
             notify_holder["send"](device_frame(ORDER_UNLOCK, bytes([session_key])))
-            print("        -> svarade 0x21 (unlocked)")
+            print("        -> replied 0x21 (unlocked)")
         elif order == ORDER_LOCK:
-            print("        LAS")
+            print("        LOCK")
             notify_holder["send"](device_frame(ORDER_LOCK, bytes([session_key])))
         elif order == ORDER_STATUS:
-            print("        lasstatus")
+            print("        lock status")
             notify_holder["send"](device_frame(ORDER_STATUS, bytes([session_key])))
         else:
             notify_holder["send"](device_frame(order, bytes([session_key])))
-            print(f"        -> svarade order 0x{order:02X}")
+            print(f"        -> replied order 0x{order:02X}")
 
     class Characteristic(dbus.service.Object):
         def __init__(self, index, uuid, flags, service_index):
@@ -316,12 +316,12 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
         @dbus.service.method("org.bluez.GattCharacteristic1")
         def StartNotify(self):
             self.notifying = True
-            print("[notify] appen PRENUMERERAR nu (StartNotify)")
+            print("[notify] app SUBSCRIBED (StartNotify)")
 
         @dbus.service.method("org.bluez.GattCharacteristic1")
         def StopNotify(self):
             self.notifying = False
-            print("[notify] appen SLUTAR prenumerera (StopNotify)")
+            print("[notify] app UNSUBSCRIBED (StopNotify)")
 
     class Service(dbus.service.Object):
         def __init__(self, index, uuid, primary, chars):
@@ -455,8 +455,8 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
 
     def send_notification(payload):
         print(
-            f"[notify] skickar {len(payload)} byte: {payload.hex()}"
-            f"  (prenumererar: {notify_char.notifying})"
+            f"[notify] sending {len(payload)} byte: {payload.hex()}"
+            f"  (subscribed: {notify_char.notifying})"
         )
         notify_char.value = array.array("B", payload)
         notify_char.PropertiesChanged(
@@ -466,7 +466,7 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
         )
 
     notify_holder["send"] = send_notification
-    print("[1] GATT-objekt skapade")
+    print("[1] GATT objects created")
 
     if selftest_only:
         import re as _re
@@ -474,13 +474,13 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
         root = bus.get_object(bus.get_unique_name(), app.path)
         intro = root.Introspect(dbus_interface="org.freedesktop.DBus.Introspectable")
         print(
-            "[selftest] gränssnitt pa appobjektet:",
+            "[selftest] interfaces on app object:",
             sorted(set(_re.findall(r"interface name=\"([^\"]+)\"", intro))),
         )
         objs = dbus.Interface(
             root, "org.freedesktop.DBus.ObjectManager"
         ).GetManagedObjects()
-        print(f"[selftest] GetManagedObjects gav {len(objs)} objekt")
+        print(f"[selftest] GetManagedObjects returned {len(objs)} objects")
         for k in objs:
             print("   ", k, list(objs[k].keys()))
         return
@@ -492,7 +492,7 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
         if not props.Get(ADAPTER_IFACE, "Powered"):
             props.Set(ADAPTER_IFACE, "Powered", dbus.Boolean(True))
     except dbus.exceptions.DBusException as e:
-        print(f"(kunde inte satta Powered: {e.get_dbus_name()} - fortsatter anda)")
+        print(f"(could not set Powered: {e.get_dbus_name()} - continuing anyway)")
 
     root_obj = bus.get_object(BLUEZ, "/org/bluez")
     intro = root_obj.Introspect(dbus_interface="org.freedesktop.DBus.Introspectable")
@@ -501,12 +501,12 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
     found = _re.findall(r'node name="(hci\d+)"', intro)
     if adapter not in found:
         print(
-            f"Adaptern {adapter!r} finns inte. Tillgangliga: {', '.join(found) or 'inga'}"
+            f"Adapter {adapter!r} not found. Available: {', '.join(found) or 'none'}"
         )
-        print("Kolla med: bluetoothctl list")
+        print("Check with: bluetoothctl list")
         return
 
-    print("[2] registrerar GATT-applikation och annons (asynkront)...")
+    print("[2] Registering GATT application and advertisement (asynchronously)...")
     gatt_mgr = dbus.Interface(bus.get_object(BLUEZ, adapter_path), GATT_MANAGER)
     adv_mgr = dbus.Interface(bus.get_object(BLUEZ, adapter_path), ADV_MANAGER)
 
@@ -520,17 +520,17 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
             pass
 
     def gatt_ok():
-        print("[3] GATT-applikation registrerad")
+        print("[3] GATT application registered")
 
     def gatt_fail(err):
-        print(f"RegisterApplication misslyckades: {err.get_dbus_name()}")
-        print("Kor: sudo systemctl restart bluetooth   och forsok igen")
+        print(f"RegisterApplication failed: {err.get_dbus_name()}")
+        print("Run: sudo systemctl restart bluetooth and try again")
 
     def adv_ok():
-        print(f"[4] annonserar som {name!r} pa {adapter}")
+        print(f"[4] Advertising as {name!r} on {adapter}")
 
     def adv_fail(err):
-        print(f"RegisterAdvertisement misslyckades: {err.get_dbus_name()}")
+        print(f"RegisterAdvertisement failed: {err.get_dbus_name()}")
 
     gatt_mgr.RegisterApplication(
         app.path,
@@ -546,25 +546,25 @@ def run_peripheral(name, expected_key, session_key, adapter, selftest_only=False
     )
 
     print(
-        f"Forvantad deviceKey: {expected_key!r}   sessionsnyckel: 0x{session_key:02X}"
+        f"Expected deviceKey: {expected_key!r}   session key: 0x{session_key:02X}"
     )
-    print("Tryck enheten i appen och se ramarna har. Ctrl-C for att avsluta.")
+    print("Select the device in the app to see frames here. Ctrl-C to exit.")
     GLib.MainLoop().run()
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Emulerat Omni-las over BLE")
-    ap.add_argument("--name", default="Scooter1", help="annonserat BLE-namn")
-    ap.add_argument("--key", default="4BKNwi77", help="deviceKey appen ska skicka")
-    ap.add_argument("--session-key", default="0x5A", help="nyckeln laset svarar med")
+    ap = argparse.ArgumentParser(description="Emulated Omni lock over BLE")
+    ap.add_argument("--name", default="Scooter1", help="advertised BLE name")
+    ap.add_argument("--key", default="4BKNwi77", help="deviceKey the app should send")
+    ap.add_argument("--session-key", default="0x5A", help="session key returned by the lock")
     ap.add_argument("--adapter", default="hci0")
     ap.add_argument(
         "--selftest",
         action="store_true",
-        help="testa GATT-exporten, ingen registrering",
+        help="test the GATT export without registration",
     )
     ap.add_argument(
-        "--log", metavar="FIL", help="skriv ocksa all utskrift till denna fil"
+        "--log", metavar="FILE", help="also write all output to this file"
     )
     a = ap.parse_args()
     if a.log:
@@ -583,8 +583,8 @@ def main():
         run_peripheral(a.name, a.key, session_key, a.adapter)
     except ImportError:
         sys.exit(
-            "saknar dbus-python/PyGObject. Paket: python3-dbus python3-gi\n"
-            "Kor: sudo python3 fake_lock.py"
+            "missing dbus-python/PyGObject. Packages: python3-dbus python3-gi\n"
+            "Run: sudo python3 fake_lock.py"
         )
 
 

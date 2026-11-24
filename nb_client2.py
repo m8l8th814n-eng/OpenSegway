@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Interaktiv BLE-klient; kräver nb_client.py i samma katalog."""
+"""Interactive BLE client; requires nb_client.py in the same directory."""
 
 import argparse
 import sys
@@ -21,18 +21,18 @@ try:
         open_payload,
     )
 except ImportError:
-    sys.exit("nb_client.py maste ligga i samma katalog som nb_client2.py")
+    sys.exit("nb_client.py must be in the same directory as nb_client2.py")
 
 
 def scan(bus, adapter_iface, root, seconds, quiet=False, keep_discovering=False):
 
     if not quiet:
-        print(f"skannar i {int(seconds)} s ...")
+        print(f"scanning for {int(seconds)} s ...")
 
     try:
         adapter_iface.SetDiscoveryFilter({"Transport": "le"})
     except Exception as e:
-        print(f"    (kunde inte satta LE-filter: {e})")
+        print(f"    (could not set LE filter: {e})")
     try:
         adapter_iface.StartDiscovery()
     except Exception as e:
@@ -74,13 +74,13 @@ def scan(bus, adapter_iface, root, seconds, quiet=False, keep_discovering=False)
 
 def show(devs):
     print()
-    print(f"{'#':>3}  {'namn':32s} {'adress':18s} {'rssi':>5}  parad")
+    print(f"{'#':>3}  {'name':32s} {'address':18s} {'rssi':>5}  paired")
     print("-" * 72)
     for i, d in enumerate(devs, 1):
-        nm = d["name"][:32] if d["name"] else "(namnlos)"
+        nm = d["name"][:32] if d["name"] else "(unnamed)"
         rssi = f"{d['rssi']}" if d["rssi"] is not None else "-"
         print(
-            f"{i:>3}  {nm:32s} {d['addr']:18s} {rssi:>5}  {'ja' if d['paired'] else '-'}"
+            f"{i:>3}  {nm:32s} {d['addr']:18s} {rssi:>5}  {'yes' if d['paired'] else '-'}"
         )
     print()
 
@@ -135,7 +135,7 @@ def fresh_connect(adapter_iface, bus, root, address, name, timeout=15.0):
     if p is None:
         p = wait_for_device(adapter_iface, root, address, timeout)
     if p is None:
-        print("    enheten syns inte annonsera just nu")
+        print("    device is not currently advertising")
         return None
     try:
         adapter_iface.StopDiscovery()
@@ -156,7 +156,7 @@ def connect(adapter_iface, bus, dev_path, label=""):
         except Exception:
             continue
     if label:
-        print(f"    ansluter {label} ...")
+        print(f"    connecting {label} ...")
     dev.Connect()
     return dev
 
@@ -230,26 +230,26 @@ class Session:
                 value = self.inbox.pop(0)
                 o, dec = parse(value)
                 if o is None:
-                    print(f"       <odekodbart svar: {dec}>")
+                    print(f"       <undecodable reply: {dec}>")
                     continue
                 pl = dec[6 : 6 + dec[2]]
                 print(
-                    f"       <- order={o:>3} status={dec[6]} nyckel=0x{dec[4]:02X} "
+                    f"       <- order={o:>3} status={dec[6]} key=0x{dec[4]:02X} "
                     f"payload={pl.hex()}"
                 )
                 return o, dec
             pump(0.05)
-        print("       (inget svar)")
+        print("       (no reply)")
         return None, None
 
     def handshake(self, device_key):
-        print(f"    handskakning med deviceKey {device_key!r}")
-        _, dec = self.send(ORDER_KEY, key_payload(device_key), "nyckel")
+        print(f"    handshake with deviceKey {device_key!r}")
+        _, dec = self.send(ORDER_KEY, key_payload(device_key), "key")
         if dec is None or dec[6] != 1:
-            print("    ingen giltig nyckel tillbaka")
+            print("    no valid key returned")
             return False
         self.key = dec[7]
-        print(f"    OK - sessionsnyckel 0x{self.key:02X}")
+        print(f"    OK - session key 0x{self.key:02X}")
         return True
 
     def close(self):
@@ -264,9 +264,9 @@ class Session:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Interaktiv BLE-klient mot fake_lock")
-    ap.add_argument("--scan", type=float, default=10.0, help="skanningstid i sekunder")
-    ap.add_argument("--key", default="4BKNwi77", help="deviceKey att skicka")
+    ap = argparse.ArgumentParser(description="Interactive BLE client for fake_lock")
+    ap.add_argument("--scan", type=float, default=10.0, help="scan duration in seconds")
+    ap.add_argument("--key", default="4BKNwi77", help="deviceKey to send")
     ap.add_argument("--adapter", default="hci0")
     a = ap.parse_args()
 
@@ -275,8 +275,8 @@ def main():
         import dbus.mainloop.glib
     except ImportError:
         sys.exit(
-            "saknar dbus-python/PyGObject. Paket: python3-dbus python3-gi\n"
-            "Kor med systemets python3."
+            "missing dbus-python/PyGObject. Packages: python3-dbus python3-gi\n"
+            "Run with the system python3."
         )
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
@@ -290,13 +290,13 @@ def main():
 
     devs = scan(bus, adapter_iface, root, a.scan, keep_discovering=True)
     if not devs:
-        print("hittade inga enheter")
+        print("no devices found")
         return 1
 
     while True:
         show(devs)
         try:
-            val = input("valj nummer (r = skanna om, q = avsluta): ").strip().lower()
+            val = input("select a number (r = rescan, q = quit): ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
@@ -305,17 +305,17 @@ def main():
         if val == "r":
             devs = scan(bus, adapter_iface, root, a.scan, keep_discovering=True)
             if not devs:
-                print("hittade inga enheter")
+                print("no devices found")
             continue
         if not val.isdigit() or not (1 <= int(val) <= len(devs)):
-            print("ogiltigt val")
+            print("invalid selection")
             continue
 
         target = devs[int(val) - 1]
-        print(f"\nvalde {target['name']!r} ({target['addr']})")
+        print(f"\nselected {target['name']!r} ({target['addr']})")
         if target["rssi"] is not None and target["rssi"] < -90:
             print(
-                f"    varning: svag signal ({target['rssi']} dBm) - kan bli svart att na"
+                f"    warning: weak signal ({target['rssi']} dBm) - may be difficult to reach"
             )
 
         sess = None
@@ -327,10 +327,10 @@ def main():
                 pass
             dev_path = resolve_path(root, target["addr"])
             if dev_path is None:
-                print("    enheten ar borta ur listan - skannar efter den igen ...")
+                print("    device disappeared from the list - scanning for it again ...")
                 dev_path = wait_for_device(adapter_iface, root, target["addr"], 12.0)
             if dev_path is None:
-                print("    hittar den inte langre. Valj r och skanna om.")
+                print("    device no longer found. Choose r to rescan.")
                 continue
             try:
                 adapter_iface.StopDiscovery()
@@ -342,23 +342,23 @@ def main():
             write_path, notify_path = find_notify_write(bus, root)
             if not (write_path and notify_path):
                 print(
-                    "    hittade inte tjanstens karakteristiker - ar det en fake_lock?"
+                    "    could not find the service characteristics - is it running fake_lock?"
                 )
                 continue
             sess = Session(bus, root, dev, write_path, notify_path)
-            print("    prenumererar pa notify")
+            print("    subscribing to notifications")
             if not sess.handshake(a.key):
                 sess.close()
                 continue
 
-            sess.send(ORDER_OPEN, open_payload(int(time.time())), "LAS UPP")
+            sess.send(ORDER_OPEN, open_payload(int(time.time())), "UNLOCK")
 
             while True:
                 try:
                     cmd = (
                         input(
-                            "  [u]pplas [l]as [f]ordonsinfo [s]tatus "
-                            "[a]nslut igen [q]uit > "
+                            "  [u]nlock [l]ock [f] vehicle info [s]tatus "
+                            "[a] reconnect [q]uit > "
                         )
                         .strip()
                         .lower()
@@ -369,11 +369,11 @@ def main():
                 if cmd == "q" or cmd == "":
                     break
                 if cmd == "u":
-                    sess.send(ORDER_OPEN, open_payload(int(time.time())), "LAS UPP")
+                    sess.send(ORDER_OPEN, open_payload(int(time.time())), "UNLOCK")
                 elif cmd == "l":
-                    sess.send(ORDER_CLOSE, open_payload(int(time.time())), "LAS")
+                    sess.send(ORDER_CLOSE, open_payload(int(time.time())), "LOCK")
                 elif cmd == "f":
-                    sess.send(ORDER_SCOOTER_INFO, bytes(8), "fordonsinfo")
+                    sess.send(ORDER_SCOOTER_INFO, bytes(8), "vehicle info")
                 elif cmd == "s":
                     sess.send(ORDER_INFO, bytes(1), "status")
                 elif cmd == "a":
@@ -383,15 +383,15 @@ def main():
             msg = str(e)
             if "UnknownObject" in msg or "doesn't exist" in msg:
                 print(
-                    "    enheten forsvann ur BlueZ lista innan anslutningen hann ske."
+                    "    device disappeared from BlueZ before the connection completed."
                 )
-                print("    Kor r for att skanna om och valj den igen.")
+                print("    Press r to rescan and select it again.")
             else:
-                print(f"    fel: {msg}")
+                print(f"    error: {msg}")
         finally:
             if sess is not None:
                 sess.close()
-                print("  nerkopplad")
+                print("  disconnected")
 
 
 if __name__ == "__main__":

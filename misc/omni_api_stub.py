@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Lokal HTTP-stub för BleTools API med request-loggning."""
+"""Local HTTP stub for the BleTool API with request logging."""
 
 import argparse
 import json
@@ -16,7 +16,7 @@ try:
     patch_offline.build_config()
     LOGIN_BEAN = json.loads(patch_offline.PAYLOAD)
 except Exception as e:
-    print("kunde inte lasa patch_offline.py (%s) - login ger tom data" % e)
+    print("could not read patch_offline.py (%s) - login returns empty data" % e)
     LOGIN_BEAN = {
         "token": "",
         "expiredTimeStamp": 4102444800000,
@@ -52,9 +52,9 @@ def login_response(qs):
     if account not in users:
         users[account] = pwd_md5
         save_users(users)
-        print("    NYTT KONTO skapat for", repr(account))
+        print("    NEW ACCOUNT created for", repr(account))
     elif users[account] != pwd_md5:
-        print("    FEL losenord for", repr(account))
+        print("    WRONG password for", repr(account))
         return {"code": 202, "data": None}
     data = dict(LOGIN_BEAN)
     data["token"] = "srv-%s" % account
@@ -138,7 +138,7 @@ def main():
     ap.add_argument("--port", type=int, default=18080)
     args = ap.parse_args()
     srv = QuietServer((args.host, args.port), Handler)
-    print(f"lyssnar pa http://{args.host}:{args.port}/  (Ctrl-C stannar)")
+    print(f"listening on http://{args.host}:{args.port}/  (Ctrl-C to stop)")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

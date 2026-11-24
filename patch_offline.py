@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Patchar en apktool-dekodad BleTool 3.9.23-katalog."""
+"""Patches an apktool-decoded BleTool 3.9.23 directory."""
 
 import argparse
 import glob
@@ -228,7 +228,7 @@ def assert_fresh(root):
     )
     if os.path.exists(marker) and ":seed_done" in open(marker, encoding="utf-8").read():
         raise SystemExit(
-            "TRAFFET AR REDAN PATCHAT (%s) - gor en farsk kopia av decoded/" % root
+            "DIRECTORY IS ALREADY PATCHED (%s) - make a fresh copy of decoded/" % root
         )
 
 
@@ -243,7 +243,7 @@ def patch_app(path):
         "(Landroid/content/Context;)V\n\n"
     )
     if anchor not in t0:
-        raise SystemExit("TApplication: hittar inte SP-init")
+        raise SystemExit("TApplication: could not find SP init")
     t = t0.replace(
         ".method public onCreate()V\n    .locals 2\n",
         ".method public onCreate()V\n    .locals 3\n",
@@ -251,26 +251,26 @@ def patch_app(path):
     t = t.replace(anchor, anchor + inject_block(":app_done"))
     assert t != t0
     write(path, t)
-    print("patchad:", path)
+    print("patched:", path)
 
 
 def patch_welcome(path):
     t0 = open(path, encoding="utf-8").read()
     n = t0.count("const-class v1, Lcom/omni/production/check/activity/LoginActivity;")
     if n < 1:
-        raise SystemExit("WelcomeActivity: hittar inga LoginActivity-refs")
+        raise SystemExit("WelcomeActivity: found no LoginActivity references")
     t = t0.replace(
         "const-class v1, Lcom/omni/production/check/activity/LoginActivity;",
         "const-class v1, Lcom/omni/production/check/activity/HomeActivity;",
     )
     if "if-lez v0, :cond_0" not in t:
-        raise SystemExit("WelcomeActivity: hittar inte utgangen-grenen")
+        raise SystemExit("WelcomeActivity: could not find the expired-token branch")
     t = t.replace("if-lez v0, :cond_0", "goto :cond_0")
     write(path, t)
     print(
-        "patchad:",
+        "patched:",
         path,
-        "(%d LoginActivity -> HomeActivity, utgangen-gren borttagen)" % n,
+        "(%d LoginActivity -> HomeActivity, expired-token branch removed)" % n,
     )
 
 
@@ -281,7 +281,7 @@ def patch_account(path):
         t0.count("const-class v1, Lcom/omni/production/check/activity/LoginActivity;")
         != 1
     ):
-        raise SystemExit("AccountUtils: vantade 1 LoginActivity-ref")
+        raise SystemExit("AccountUtils: expected 1 LoginActivity reference")
     t = t0.replace(
         ".method public static logout(Landroid/app/Activity;)V\n    .locals 2\n",
         ".method public static logout(Landroid/app/Activity;)V\n    .locals 5\n",
@@ -295,7 +295,7 @@ def patch_account(path):
         "    .line 34\n"
     )
     if marker not in t:
-        raise SystemExit("AccountUtils: hittar inte slutet pa removeSP-kedjan")
+        raise SystemExit("AccountUtils: could not find the end of the removeSP chain")
     t = t.replace(
         marker,
         "    invoke-virtual {v0, v1}, Lcom/omni/production/check/utils/SharedPreferencesUtil;->removeSP(Ljava/lang/String;)V\n\n"
@@ -304,14 +304,14 @@ def patch_account(path):
     )
     assert t != t0
     write(path, t)
-    print("patchad:", path)
+    print("patched:", path)
 
 
 def patch_home(path):
     t0 = open(path, encoding="utf-8").read()
     m = re.search(r"\.method private refresh\(\)V\n    \.locals \d+\n\n", t0)
     if not m:
-        raise SystemExit("HomeActivity: hittar inte refresh()")
+        raise SystemExit("HomeActivity: could not find refresh()")
     t = t0.replace(
         m.group(0),
         ".method private refresh()V\n    .locals 4\n\n    return-void\n.end method\n\n"
@@ -319,20 +319,20 @@ def patch_home(path):
     )
     assert t != t0
     write(path, t)
-    print("patchad:", path, "(refresh() -> no-op, originalet kvar som refresh_orig)")
+    print("patched:", path, "(refresh() -> no-op, original preserved as refresh_orig)")
 
 
 def patch_base_url(path):
 
     if not NEW_BASE:
-        print("hoppar over bas-URL (NEW_BASE=None):", path)
+        print("skipping base URL (NEW_BASE=None):", path)
         return
     t0 = open(path, encoding="utf-8").read()
     n = t0.count(OLD_BASE)
     if n < 1:
-        raise SystemExit("%s: hittar inte %s" % (path, OLD_BASE))
+        raise SystemExit("%s: could not find %s" % (path, OLD_BASE))
     write(path, t0.replace(OLD_BASE, NEW_BASE))
-    print("patchad:", path, "(%d x %s -> %s)" % (n, OLD_BASE, NEW_BASE))
+    print("patched:", path, "(%d x %s -> %s)" % (n, OLD_BASE, NEW_BASE))
 
 
 def patch_initdata(path):
@@ -345,7 +345,7 @@ def patch_initdata(path):
         "    return-void\n.end method\n"
     )
     if old not in t0:
-        raise SystemExit("HomeActivity: initData() matchar inte")
+        raise SystemExit("HomeActivity: initData() does not match")
     seed = (
         "    invoke-static {}, Lcom/omni/production/check/utils/SharedPreferencesUtil;->getSp()Lcom/omni/production/check/utils/SharedPreferencesUtil;\n\n"
         "    move-result-object v0\n\n"
@@ -372,47 +372,47 @@ def patch_initdata(path):
         + "    return-void\n.end method\n"
     )
     write(path, t0.replace(old, new))
-    print("patchad:", path, "(initData seedar listan fran LOGIN_JSON)")
+    print("patched:", path, "(initData seeds the list from LOGIN_JSON)")
 
 
 def patch_logpath(path):
 
     t0 = open(path, encoding="utf-8").read()
     if "getExternalStoragePublicDirectory" in t0:
-        print("   loggsokvagen ar redan publik, hoppar over")
+        print("   log path is already public, skipping")
         return
     old = (
         "    invoke-virtual {v0, v1}, Landroid/content/Context;"
         "->getExternalFilesDir(Ljava/lang/String;)Ljava/io/File;"
     )
     if old not in t0:
-        raise SystemExit("hittar inte getExternalFilesDir-anropet")
+        raise SystemExit("could not find the getExternalFilesDir call")
     new = (
         "    invoke-static {v1}, Landroid/os/Environment;"
         "->getExternalStoragePublicDirectory(Ljava/lang/String;)Ljava/io/File;"
     )
     write(path, t0.replace(old, new, 1))
-    print("patchad:", path, "(loggfil -> /sdcard/Download, overlever uninstall)")
+    print("patched:", path, "(log file -> /sdcard/Download, survives uninstall)")
 
 
 def patch_manifest_storage(path):
 
     t0 = open(path, encoding="utf-8").read()
     if "MANAGE_EXTERNAL_STORAGE" in t0:
-        print("   MANAGE_EXTERNAL_STORAGE finns redan, hoppar over")
+        print("   MANAGE_EXTERNAL_STORAGE already exists, skipping")
         return
     old = (
         "    <uses-permission android:name="
         '"android.permission.WRITE_EXTERNAL_STORAGE"/>'
     )
     if old not in t0:
-        raise SystemExit("hittar inte WRITE_EXTERNAL_STORAGE-raden i manifestet")
+        raise SystemExit("could not find the WRITE_EXTERNAL_STORAGE line in the manifest")
     new = (
         old + "\n" + "    <uses-permission android:name="
         '"android.permission.MANAGE_EXTERNAL_STORAGE"/>'
     )
     write(path, t0.replace(old, new, 1))
-    print("patchad:", path, "(+MANAGE_EXTERNAL_STORAGE)")
+    print("patched:", path, "(+MANAGE_EXTERNAL_STORAGE)")
 
 
 def patch_scandialog(path):
@@ -445,20 +445,20 @@ def patch_scandialog(path):
         "    :cond_1\n"
     )
     if old not in t0:
-        raise SystemExit("ScanDialog: hittar inte filterblocket i onLeScan")
+        raise SystemExit("ScanDialog: could not find the filter block in onLeScan")
     t = t0.replace(old, new)
     k = t.count('    const-string v1, "rssi_progress"\n\n    const/16 v2, 0x1e\n')
     if k != 1:
-        raise SystemExit("ScanDialog: vantade 1 rssi-default, hittade %d" % k)
+        raise SystemExit("ScanDialog: expected 1 RSSI default, found %d" % k)
     t = t.replace(
         '    const-string v1, "rssi_progress"\n\n    const/16 v2, 0x1e\n',
         '    const-string v1, "rssi_progress"\n\n    const/16 v2, 0x3c\n',
     )
     write(path, t)
     print(
-        "patchad:",
+        "patched:",
         path,
-        "(visar allt: inget namn-/rssi-filer, MAC som fallback, rssi-golv -100)",
+        "(shows everything: no name/RSSI filter, MAC fallback, RSSI floor -100)",
     )
 
 
@@ -466,10 +466,10 @@ def patch_scandialog_timeout(path):
 
     t0 = open(path, encoding="utf-8").read()
     if t0.count("    const-wide/16 v2, 0x2710\n") != 1:
-        raise SystemExit("ScanDialog$2: hittar inte 10 s-timeout")
+        raise SystemExit("ScanDialog$2: could not find the 10 s timeout")
     t = t0.replace("    const-wide/16 v2, 0x2710\n", "    const-wide v2, 0x493e0L\n")
     write(path, t)
-    print("patchad:", path, "(skanningstid 10 s -> 5 min)")
+    print("patched:", path, "(scan time 10 s -> 5 min)")
 
 
 def patch_fwinfo_filter(path):
@@ -477,9 +477,9 @@ def patch_fwinfo_filter(path):
     t0 = open(path, encoding="utf-8").read()
     old = '    const-string v1, "Scooter|Segway IoT"\n'
     if old not in t0:
-        raise SystemExit("FwInfoActivity: hittar inte filter-strangen")
+        raise SystemExit("FwInfoActivity: could not find the filter string")
     write(path, t0.replace(old, '    const-string v1, ""\n'))
-    print("patchad:", path, '(filterName "Scooter|Segway IoT" -> "" (inget namnfiler))')
+    print("patched:", path, '(filterName "Scooter|Segway IoT" -> "" (no name filter))')
 
 
 def patch_ulock_nodownload(path):
@@ -490,7 +490,7 @@ def patch_ulock_nodownload(path):
         "    return-void\n.end method\n"
     )
     if old not in t0:
-        raise SystemExit("ULockTestActivity: hittar inte download()-anropet i initData")
+        raise SystemExit("ULockTestActivity: could not find the download() call in initData")
     new = (
         "    iget-object v0, p0, Lcom/omni/production/check/activity/ULockTestActivity;->tvFile:Landroid/widget/TextView;\n\n"
         "    new-instance v1, Ljava/lang/StringBuilder;\n\n"
@@ -511,9 +511,9 @@ def patch_ulock_nodownload(path):
     )
     t = t.replace(old, new)
     if t == t0:
-        raise SystemExit("ULockTestActivity: ingen andring")
+        raise SystemExit("ULockTestActivity: no change")
     write(path, t)
-    print("patchad:", path, "(ingen auto-nedladdning i initData)")
+    print("patched:", path, "(no automatic download in initData)")
 
 
 def patch_ulock_connect_button(path):
@@ -521,13 +521,13 @@ def patch_ulock_connect_button(path):
     t0 = open(path, encoding="utf-8").read()
     m = re.search(r"\.method private searchQrCode\(\)V\n    \.locals \d+\n", t0)
     if not m:
-        raise SystemExit("ULockTestActivity: hittar inte searchQrCode()")
+        raise SystemExit("ULockTestActivity: could not find searchQrCode()")
 
     i = m.start()
     j = t0.find("\n.end method", t0.find(".line 1050", i)) + len("\n.end method\n")
     body = t0[i:j]
     if "getMacNumMap" not in body:
-        raise SystemExit("ULockTestActivity: searchQrCode ser inte ut som vantat")
+        raise SystemExit("ULockTestActivity: searchQrCode does not look as expected")
     new = (
         ".method private searchQrCode()V\n"
         "    .locals 2\n\n"
@@ -564,7 +564,7 @@ def patch_ulock_connect_button(path):
         "    return-void\n.end method\n"
     )
     write(path, t0[:i] + new + t0[j:])
-    print("patchad:", path, "(searchQrCode ansluter pa MAC, ingen server)")
+    print("patched:", path, "(searchQrCode connects using MAC, no server)")
 
 
 def patch_download_calls(act_dir):
@@ -585,11 +585,11 @@ def patch_download_calls(act_dir):
         i = m.group(1).find(call)
         after = m.group(1)[i + len(call) :].strip()
         if after not in ("return-void",):
-            print("   HOPPAR (inte sist):", base)
+            print("   SKIPPING (not last):", base)
             continue
         write(f, t0.replace(call, ""))
         n += 1
-    print("patchad: %d aktiviteter (auto-nedladdning borttagen)" % n)
+    print("patched: %d activities (automatic download removed)" % n)
 
 
 def patch_builtin_keys(sm):
@@ -600,7 +600,7 @@ def patch_builtin_keys(sm):
     if UPD_KEY != DEFAULT_UPD_KEY:
         repl.append((DEFAULT_UPD_KEY, UPD_KEY))
     if not repl:
-        print("inbyggda nycklar: standard (ingen synk behovs)")
+        print("built-in keys: defaults (no sync needed)")
         return
     n = 0
     for f in glob.glob(os.path.join(sm, "**/*.smali"), recursive=True):
@@ -612,8 +612,8 @@ def patch_builtin_keys(sm):
             write(f, t)
             n += 1
     for old, new in repl:
-        print("inbyggd nyckel: %s -> %s" % (old, new))
-    print("   synkade %d fil(er)" % n)
+        print("built-in key: %s -> %s" % (old, new))
+    print("   synchronized %d file(s)" % n)
 
 
 def patch_oss_getfile(path):
@@ -633,9 +633,9 @@ def patch_oss_getfile(path):
         % SDCARD_DIR
     )
     if old not in t0:
-        raise SystemExit("OssUtils: hittar inte getExternalFilesDir-kedjan i getFile()")
+        raise SystemExit("OssUtils: could not find the getExternalFilesDir chain in getFile()")
     write(path, t0.replace(old, new))
-    print("patchad:", path, "(getFile -> %s)" % SDCARD_DIR)
+    print("patched:", path, "(getFile -> %s)" % SDCARD_DIR)
 
 
 def patch_oss_download_local(path):
@@ -647,7 +647,7 @@ def patch_oss_download_local(path):
         re.S,
     )
     if not m:
-        raise SystemExit("OssUtils: hittar inte downloadFile()")
+        raise SystemExit("OssUtils: could not find downloadFile()")
     new = open(
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -657,7 +657,7 @@ def patch_oss_download_local(path):
         encoding="utf-8",
     ).read()
     write(path, t0[: m.start()] + new.rstrip("\n") + t0[m.end() :])
-    print("patchad:", path, "(downloadFile -> enbart lokal fil, inget natverk)")
+    print("patched:", path, "(downloadFile -> local file only, no network)")
 
 
 def patch_versioninfo_skip(path):
@@ -671,7 +671,7 @@ def patch_versioninfo_skip(path):
         re.S,
     )
     if not m:
-        raise SystemExit("UpgradeUtils: hittar inte getVersionInfo()")
+        raise SystemExit("UpgradeUtils: could not find getVersionInfo()")
     new = open(
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -681,7 +681,7 @@ def patch_versioninfo_skip(path):
         encoding="utf-8",
     ).read()
     write(path, t0[: m.start()] + new.rstrip("\n") + t0[m.end() :])
-    print("patchad:", path, "(getVersionInfo -> no(), oppnar verktyget direkt)")
+    print("patched:", path, "(getVersionInfo -> no(), opens the tool directly)")
 
 
 def patch_hasolddata(path):
@@ -691,32 +691,32 @@ def patch_hasolddata(path):
     new = "    and-int/lit8 p1, p1, 0x40\n\n" "    if-eqz p1, :cond_2\n"
     if t0.count(old) != 1:
         raise SystemExit(
-            "ScooterLockInfoResult: hittar inte hasOldData-blocket (eller flera traffar)"
+            "ScooterLockInfoResult: could not find the hasOldData block (or found multiple matches)"
         )
     write(path, t0.replace(old, new, 1))
-    print("patchad:", path, "(hasOldData: (status|0x40)==1 -> (status&0x40)!=0)")
+    print("patched:", path, "(hasOldData: (status|0x40)==1 -> (status&0x40)!=0)")
 
 
 def verify_polarity(root, online_login=False):
 
     if online_login:
-        print("polaritetskontroll: ej tillamplig (online-login, seedning avstangd)")
+        print("polarity check: not applicable (online login, seeding disabled)")
         return
     checks = [
         (
             "smali/com/omni/production/check/TApplication.smali",
             "if-eqz v1, :app_done",
-            "skriva sessionen nar den ar TOM",
+            "write the session when it is EMPTY",
         ),
         (
             "smali/com/omni/production/check/utils/AccountUtils.smali",
             "if-eqz v1, :logout_done",
-            "aterstalla sessionen nar den ar TOM",
+            "restore the session when it is EMPTY",
         ),
         (
             "smali/com/omni/production/check/activity/HomeActivity.smali",
             "if-nez v1, :seed_done",
-            "parsa nar den INTE ar tom",
+            "parse when it is NOT empty",
         ),
     ]
     for rel, want, why in checks:
@@ -729,13 +729,13 @@ def verify_polarity(root, online_login=False):
             if want.startswith("if-eqz")
             else want.replace("if-nez", "if-eqz")
         )
-        extra = "  (hittade motsatsen: %s)" % other if other in body else ""
+        extra = "  (found the opposite: %s)" % other if other in body else ""
         raise SystemExit(
-            "POLARITETSKONTROLL MISSLYCKADES i %s\n"
-            "  saknar: %s  (%s)%s" % (rel, want, why, extra)
+            "POLARITY CHECK FAILED in %s\n"
+            "  missing: %s  (%s)%s" % (rel, want, why, extra)
         )
     print(
-        "polaritetskontroll: OK (TApplication/AccountUtils if-eqz, HomeActivity if-nez)"
+        "polarity check: OK (TApplication/AccountUtils if-eqz, HomeActivity if-nez)"
     )
 
 
@@ -743,11 +743,11 @@ def patch_noserver_log(act_path):
 
     t0 = open(act_path, encoding="utf-8").read()
     if ":ns_ok" in t0:
-        print("   nosrv-sparren finns redan, hoppar over")
+        print("   nosrv guard already exists, skipping")
         return
     old = ".method protected onBLEScooterLogData([B)V\n    .locals 3\n"
     if old not in t0:
-        raise SystemExit("hittar inte onBLEScooterLogData-header")
+        raise SystemExit("could not find the onBLEScooterLogData header")
     guard = (
         ".method protected onBLEScooterLogData([B)V\n    .locals 3\n\n"
         "    invoke-static {}, Lcom/omni/production/check/utils/"
@@ -768,18 +768,18 @@ def patch_noserver_log(act_path):
     )
     t = t0.replace(old, guard, 1)
     write(act_path, t)
-    print("patchad:", act_path, "(nosrv-markerad rad hoppar over logg-uppladdningen)")
+    print("patched:", act_path, "(nosrv row skips log upload)")
 
 
 def patch_autounlock(act_path):
 
     t0 = open(act_path, encoding="utf-8").read()
     if ":au_check" in t0:
-        print("   autounlock-sparren finns redan, hoppar over")
+        print("   autounlock guard already exists, skipping")
         return
     old = ".method protected onBLEGetKey(Ljava/lang/String;B)V\n    .locals 6\n"
     if old not in t0:
-        raise SystemExit("hittar inte onBLEGetKey-header")
+        raise SystemExit("could not find the onBLEGetKey header")
     guard = (
         ".method protected onBLEGetKey(Ljava/lang/String;B)V\n    .locals 6\n\n"
         "    invoke-static {}, Lcom/omni/production/check/utils/"
@@ -801,29 +801,29 @@ def patch_autounlock(act_path):
     )
     t = t0.replace(old, guard, 1)
     write(act_path, t)
-    print("patchad:", act_path, "(autounlock-raden laser upp automatiskt)")
+    print("patched:", act_path, "(autounlock row unlocks automatically)")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(
-        description="Patcha BleTool 3.9.23 (com.omni.production.check) -> offline."
+        description="Patch BleTool 3.9.23 (com.omni.production.check) for offline use."
     )
     ap.add_argument(
         "decoded",
         nargs="?",
         default="decoded_patched",
-        help="apktool-dekodad katalog (default: decoded_patched)",
+        help="apktool-decoded directory (default: decoded_patched)",
     )
     ap.add_argument(
         "--dev-key",
         default=DEFAULT_DEV_KEY,
-        help="BLE-nyckel (default: inbyggd fungerande nyckel)",
+        help="BLE key (default: working built-in key)",
     )
     ap.add_argument(
         "--dev-type", default=DEFAULT_DEV_TYPE, help="deviceType hex (default 60)"
     )
     ap.add_argument(
-        "--upd-key", default=DEFAULT_UPD_KEY, help="upgrade-nyckel (default C7qn)"
+        "--upd-key", default=DEFAULT_UPD_KEY, help="upgrade key (default C7qn)"
     )
     ap.add_argument(
         "--dev-ver", default=DEFAULT_DEV_VER, help="bleVersion (default 1.0)"
@@ -831,14 +831,14 @@ if __name__ == "__main__":
     ap.add_argument(
         "--base",
         default=NEW_BASE,
-        help="omni-api bas-URL; 'none' lamnar originalet orort",
+        help="omni-api base URL; 'none' leaves the original unchanged",
     )
     ap.add_argument(
         "--online-login",
         action="store_true",
-        help="stang av offline-seedningen (TApplication/Welcome/"
-        "AccountUtils/HomeActivity refresh+initdata) sa den "
-        "RIKTIGA inloggningsskarmen kors mot egen server",
+        help="disable offline seeding (TApplication/Welcome/"
+        "AccountUtils/HomeActivity refresh+initdata) so the "
+        "REAL login screen runs against your own server",
     )
     a = ap.parse_args()
 
@@ -846,7 +846,7 @@ if __name__ == "__main__":
     NEW_BASE = None if str(a.base).strip().lower() in ("none", "") else a.base
     ROOT = a.decoded
     SM = os.path.join(ROOT, "smali/com/omni/production/check")
-    assert os.path.isdir(SM), "hittar inte %s" % SM
+    assert os.path.isdir(SM), "could not find %s" % SM
     build_config()
 
     assert_fresh(ROOT)
@@ -857,7 +857,7 @@ if __name__ == "__main__":
         patch_home(os.path.join(SM, "activity/HomeActivity.smali"))
         patch_initdata(os.path.join(SM, "activity/HomeActivity.smali"))
     else:
-        print("online-login: seedning avstangd - riktig login-skarm anvands")
+        print("online login: seeding disabled - real login screen used")
     patch_base_url(os.path.join(SM, "network/RetrofitUtils.smali"))
     patch_base_url(os.path.join(SM, "network/ApiService.smali"))
     patch_scandialog(os.path.join(SM, "dialog/ScanDialog.smali"))
@@ -889,6 +889,6 @@ if __name__ == "__main__":
     )
     verify_polarity(ROOT, online_login=a.online_login)
     print(
-        "\nnyckel:", DEV_KEY, "| typ:", DEV_TYPE, "| upd:", UPD_KEY, "| ver:", DEV_VER
+        "\nkey:", DEV_KEY, "| type:", DEV_TYPE, "| upd:", UPD_KEY, "| ver:", DEV_VER
     )
-    print("bas-URL:", NEW_BASE or "(orort)")
+    print("base URL:", NEW_BASE or "(unchanged)")

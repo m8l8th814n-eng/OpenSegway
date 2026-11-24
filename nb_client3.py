@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Menyklient för BleTool-lås, ZK600-skal och allmän GATT-utforskning."""
+"""Menu client for BleTool locks, ZK600 shell, and general GATT exploration."""
 
 import argparse
 import sys
@@ -22,15 +22,15 @@ try:
     from nb_client2 import pump, scan, show, fresh_connect, dbus_interface
 except ImportError as e:
     sys.exit(
-        f"saknar broderna: {e}\n"
-        "nb_client.py, nb_client2.py och nb_client3.py maste ligga "
-        "i samma katalog."
+        f"missing sibling modules: {e}\n"
+        "nb_client.py, nb_client2.py, and nb_client3.py must be "
+        "in the same directory."
     )
 
 
-NYCKLAR = ["4BKNwi77", "yOTmK50z", "OmniW4GX", "Vgz7"]
+DEVICE_KEYS = ["4BKNwi77", "yOTmK50z", "OmniW4GX", "Vgz7"]
 
-UUID_LAS = (
+UUID_LOCK = (
     "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
     "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
 )
@@ -122,26 +122,26 @@ class Session:
                 value = self.inbox.pop(0)
                 o, dec = parse(value)
                 if o is None:
-                    print(f"       <odekodbart svar: {dec}>")
+                    print(f"       <undecodable reply: {dec}>")
                     continue
                 pl = dec[6 : 6 + dec[2]]
                 print(
-                    f"       <- order={o:>3} status={dec[6]} nyckel=0x{dec[4]:02X} "
+                    f"       <- order={o:>3} status={dec[6]} key=0x{dec[4]:02X} "
                     f"payload={pl.hex()}"
                 )
                 return o, dec
             pump(0.05)
-        print("       (inget svar)")
+        print("       (no reply)")
         return None, None
 
     def handshake(self, device_key):
-        print(f"    handskakning med deviceKey {device_key!r}")
-        _, dec = self.send(ORDER_KEY, key_payload(device_key), "nyckel")
+        print(f"    handshake with deviceKey {device_key!r}")
+        _, dec = self.send(ORDER_KEY, key_payload(device_key), "key")
         if dec is None or dec[6] != 1:
-            print("    ingen giltig nyckel tillbaka")
+            print("    no valid key returned")
             return False
         self.key = dec[7]
-        print(f"    OK - sessionsnyckel 0x{self.key:02X}")
+        print(f"    OK - session key 0x{self.key:02X}")
         return True
 
     def send_text(self, line, settle=1.0):
@@ -165,7 +165,7 @@ class Session:
                 txt = value.decode("utf-8", errors="strict").strip("\r\n\0")
                 print(f"    <- {txt!r}")
             except UnicodeDecodeError:
-                print(f"    <- (binart) {value.hex()}")
+                print(f"    <- (binary) {value.hex()}")
 
     def close(self, dev):
         try:
@@ -181,20 +181,20 @@ class Session:
 def pick_device(bus, adapter_iface, root, scan_seconds=12.0):
     devs = scan(bus, adapter_iface, root, scan_seconds, keep_discovering=True)
     if not devs:
-        print("hittade inga enheter")
+        print("no devices found")
         return None
     while True:
         show(devs)
-        val = ask("valj nummer (r = skanna om, q = avsluta): ")
+        val = ask("select a number (r = rescan, q = quit): ")
         if val is None or val in ("q", ""):
             return None
         if val == "r":
             devs = scan(bus, adapter_iface, root, scan_seconds, keep_discovering=True)
             if not devs:
-                print("hittade inga enheter")
+                print("no devices found")
             continue
         if not val.isdigit() or not (1 <= int(val) <= len(devs)):
-            print("ogiltigt val")
+            print("invalid selection")
             continue
         try:
             adapter_iface.StopDiscovery()
@@ -209,31 +209,31 @@ def connect_and_session(bus, adapter_iface, root, target, write_uuid, notify_uui
         return None, None
     write_path, notify_path = find_chars(root, write_uuid, notify_uuid)
     if not (write_path and notify_path):
-        print(f"    hittade inte {write_uuid[:20]}... pa enheten")
+        print(f"    could not find {write_uuid[:20]}... on the device")
         try:
             dev.Disconnect()
         except Exception:
             pass
         return None, None
     sess = Session(bus, write_path, notify_path)
-    print("    prenumererar pa notify")
+    print("    subscribing to notifications")
     return dev, sess
 
 
 def pick_key():
-    print("    nycklar ur appen:")
-    for i, k in enumerate(NYCKLAR, 1):
+    print("    keys from the app:")
+    for i, k in enumerate(DEVICE_KEYS, 1):
         print(f"      {i} = {k}")
-    v = ask("    valj [1-4 eller egen, enter=1]: ", "1")
+    v = ask("    select [1-4 or custom, enter=1]: ", "1")
     if v is None:
         return None
-    if v.isdigit() and 1 <= int(v) <= len(NYCKLAR):
-        return NYCKLAR[int(v) - 1]
+    if v.isdigit() and 1 <= int(v) <= len(DEVICE_KEYS):
+        return DEVICE_KEYS[int(v) - 1]
     return v
 
 
 def mode_lock(bus, adapter_iface, root, target):
-    dev, sess = connect_and_session(bus, adapter_iface, root, target, *UUID_LAS)
+    dev, sess = connect_and_session(bus, adapter_iface, root, target, *UUID_LOCK)
     if not sess:
         return
     device_key = pick_key()
@@ -244,20 +244,20 @@ def mode_lock(bus, adapter_iface, root, target):
         sess.handshake(device_key)
         while True:
             cmd = ask(
-                "  [u]pplas [l]as [s]tatus [f]ordonsinfo firm[w]are "
-                "[k] byt nyckel+handsaka [a]nnu en enhet [q] > ",
+                "  [u]nlock [l]ock [s]tatus [f] vehicle info firm[w]are "
+                "[k] change key+handshake [a]nother device [q] > ",
                 "q",
             )
             if cmd is None or cmd in ("q", ""):
                 return
             if cmd == "u":
-                sess.send(ORDER_OPEN, open_payload(int(time.time())), "LAS UPP")
+                sess.send(ORDER_OPEN, open_payload(int(time.time())), "UNLOCK")
             elif cmd == "l":
-                sess.send(ORDER_CLOSE, open_payload(int(time.time())), "LAS")
+                sess.send(ORDER_CLOSE, open_payload(int(time.time())), "LOCK")
             elif cmd == "s":
                 sess.send(ORDER_INFO, bytes(1), "status")
             elif cmd == "f":
-                sess.send(ORDER_SCOOTER_INFO, bytes(8), "fordonsinfo")
+                sess.send(ORDER_SCOOTER_INFO, bytes(8), "vehicle info")
             elif cmd == "w":
                 sess.send(ORDER_FW, bytes(1), "firmware-info")
             elif cmd == "k":
@@ -271,7 +271,7 @@ def mode_lock(bus, adapter_iface, root, target):
             sess.drain()
     finally:
         sess.close(dev)
-        print("  nerkopplad")
+        print("  disconnected")
 
 
 def mode_shell(bus, adapter_iface, root, target):
@@ -281,8 +281,8 @@ def mode_shell(bus, adapter_iface, root, target):
     try:
         pump(1.0)
         sess.drain()
-        print("    text+enter skickar med CRLF; 'hex aabb' = rabyte;")
-        print("    tom rad = bara las; q = tillbaka. Borja med enter / 'help'.")
+        print("    text+enter sends CRLF; 'hex aabb' = raw bytes;")
+        print("    empty line = read only; q = back. Start with enter / 'help'.")
         while True:
             line = ask("  shell> ")
             if line is None or line in ("q", "quit", "exit"):
@@ -290,7 +290,7 @@ def mode_shell(bus, adapter_iface, root, target):
             sess.send_text(line)
     finally:
         sess.close(dev)
-        print("  nerkopplad")
+        print("  disconnected")
 
 
 def list_gatt(root):
@@ -316,7 +316,7 @@ def list_gatt(root):
 
 
 def show_gatt(chars):
-    print(f"\n{'#':>3}  {'service':38s} {'char':38s} flaggor")
+    print(f"\n{'#':>3}  {'service':38s} {'char':38s} flags")
     print("-" * 100)
     for i, (path, svc, u, flags) in enumerate(chars, 1):
         print(f"{i:>3}  {svc:38s} {u:38s} {flags}")
@@ -331,11 +331,11 @@ def mode_explore(bus, adapter_iface, root, target):
     try:
         chars = list_gatt(root)
         if not chars:
-            print("    inga karakteristiker synliga")
+            print("    no characteristics visible")
             return
         show_gatt(chars)
-        print("    kommandon: l N=las, w N=skriv hex, n N=notify av/pa,")
-        print("    g=lista om, q=tillbaka")
+        print("    commands: l N=read, w N=write hex, n N=toggle notify,")
+        print("    g=refresh list, q=back")
         import dbus
 
         while True:
@@ -351,7 +351,7 @@ def mode_explore(bus, adapter_iface, root, target):
                 continue
             idx_s, hx = (rest.split("=", 1) + [""])[:2] if "=" in rest else (rest, "")
             if not idx_s.isdigit() or not (1 <= int(idx_s) <= len(chars)):
-                print("    ogiltigt - t.ex. 'l 3', 'w 5=a3a4', 'n 5'")
+                print("    invalid - e.g. 'l 3', 'w 5=a3a4', 'n 5'")
                 continue
             idx = int(idx_s)
             path = chars[idx - 1][0]
@@ -365,7 +365,7 @@ def mode_explore(bus, adapter_iface, root, target):
                     )
                     print(f"    <- {val.hex()}  {val!r}")
                 except Exception as e:
-                    print(f"    lasfel: {e}")
+                    print(f"    read error: {e}")
             elif op == "w":
                 if not hx:
                     print("    format: w N=aabbcc")
@@ -378,7 +378,7 @@ def mode_explore(bus, adapter_iface, root, target):
                     )
                     print(f"    -> {data.hex()}")
                 except Exception as e:
-                    print(f"    skrivfel: {e}")
+                    print(f"    write error: {e}")
             elif op == "n":
                 if idx in subs:
                     try:
@@ -387,7 +387,7 @@ def mode_explore(bus, adapter_iface, root, target):
                         pass
                     bus.remove_signal_receiver(subs[idx][1])
                     del subs[idx]
-                    print("    notify AV")
+                    print("    notify OFF")
                 else:
 
                     def mk_printer(tag):
@@ -409,12 +409,12 @@ def mode_explore(bus, adapter_iface, root, target):
                         ch.StartNotify()
                         subs[idx] = (ch, rx)
                         print(
-                            "    notify PA  (kommandon gar fortfarande; "
-                            "varden skrivs ut nar de kommer)"
+                            "    notify ON  (commands still work; "
+                            "values are printed as they arrive)"
                         )
                     except Exception as e:
                         bus.remove_signal_receiver(rx)
-                        print(f"    notifyfel: {e}")
+                        print(f"    notify error: {e}")
             pump(0.3)
     finally:
         for ch, rx in subs.values():
@@ -430,24 +430,24 @@ def mode_explore(bus, adapter_iface, root, target):
             dev.Disconnect()
         except Exception:
             pass
-        print("  nerkopplad")
+        print("  disconnected")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="BLE menyklient (BleTool/ZK600)")
+    ap = argparse.ArgumentParser(description="BLE menu client (BleTool/ZK600)")
     ap.add_argument("--adapter", default="hci0")
     a = ap.parse_args()
 
-    print("nb_client3 - valj funktion:")
-    print("  1 = BleTool-las (Omni A3A4 / NUS)")
+    print("nb_client3 - select a function:")
+    print("  1 = BleTool lock (Omni A3A4 / NUS)")
     print("  2 = ZK600 serial shell (ff02/ff03)")
-    print("  3 = GATT-utforskare (okand enhet)")
-    v = ask("funktion [1/2/3]: ", "1")
+    print("  3 = GATT explorer (unknown device)")
+    v = ask("function [1/2/3]: ", "1")
     if v is None:
         return 0
-    mode = {"1": "las", "2": "shell", "3": "gatt"}.get(v)
+    mode = {"1": "lock", "2": "shell", "3": "gatt"}.get(v)
     if mode is None:
-        print("ogiltigt val")
+        print("invalid selection")
         return 2
 
     try:
@@ -455,7 +455,7 @@ def main():
         import dbus.mainloop.glib
     except ImportError:
         sys.exit(
-            "saknar dbus-python/PyGObject - kor med systemets python3 "
+            "missing dbus-python/PyGObject - run with the system python3 "
             "(tsu + /usr/bin/python3)."
         )
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -471,19 +471,19 @@ def main():
         target = pick_device(bus, adapter_iface, root)
         if target is None:
             return 0
-        print(f"\nvalde {target['name']!r} ({target['addr']})")
+        print(f"\nselected {target['name']!r} ({target['addr']})")
         if target["rssi"] is not None and target["rssi"] < -90:
-            print(f"    varning: svag signal ({target['rssi']} dBm)")
+            print(f"    warning: weak signal ({target['rssi']} dBm)")
         try:
-            if mode == "las":
+            if mode == "lock":
                 mode_lock(bus, adapter_iface, root, target)
             elif mode == "shell":
                 mode_shell(bus, adapter_iface, root, target)
             else:
                 mode_explore(bus, adapter_iface, root, target)
         except Exception as e:
-            print(f"    fel: {e}")
-        if ask("anslut till annan enhet? [j/N]: ", "n") not in ("j", "ja", "y"):
+            print(f"    error: {e}")
+        if ask("connect to another device? [y/N]: ", "n") not in ("y", "yes"):
             return 0
 
 

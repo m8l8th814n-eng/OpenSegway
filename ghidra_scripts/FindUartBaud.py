@@ -1,4 +1,4 @@
-"""Ghidra-skript som söker UART-baudrater och USART-registerreferenser."""
+"""Ghidra script that finds UART baud rates and USART register references."""
 
 from ghidra.program.model.scalar import Scalar
 
@@ -81,15 +81,15 @@ def fname(addr):
     return str(f.getName()) if f else "-"
 
 
-print("\n================ BAUD-KONSTANTER (operand = baud) ================")
+print("\n================ BAUD CONSTANTS (operand = baud) ================")
 for addr, v, txt in hits_baud:
-    print("%s  baud=%-7d i %-28s  %s" % (addr, v, fname(addr), txt))
+    print("%s  baud=%-7d in %-28s  %s" % (addr, v, fname(addr), txt))
 
-print("\n================ USART-REGISTER-REFERENSER ================")
+print("\n================ USART REGISTER REFERENCES ================")
 for addr, reg, txt in hits_reg:
-    print("%s  %-18s i %-28s  %s" % (addr, reg, fname(addr), txt))
+    print("%s  %-18s in %-28s  %s" % (addr, reg, fname(addr), txt))
 
 print(
-    "\nSUMMERING: %d baud-instanter, %d register-referenser"
+    "\nSUMMARY: %d baud occurrences, %d register references"
     % (len(hits_baud), len(hits_reg))
 )
