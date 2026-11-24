@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101411">
+  <title>Glide — Scooterkarta</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101411; --panel:#171d19; --line:#2a342d; --muted:#9ca89f; --text:#f2f5ef; --lime:#c6f36a; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    .app { min-height:100vh; display:grid; grid-template-rows:76px 1fr; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:0 30px; border-bottom:1px solid var(--line); background:#121713; z-index:500; }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:750; letter-spacing:-.04em; font-size:20px; }
+    .logo { width:34px; height:34px; display:grid; place-items:center; border-radius:11px; color:#17200e; background:var(--lime); font-size:20px; }
+    .top-right { display:flex; align-items:center; gap:20px; color:var(--muted); font-size:13px; }
+    .live { display:flex; align-items:center; gap:8px; color:#dce8dc; }.dot { width:8px;height:8px;border-radius:99px;background:var(--lime);box-shadow:0 0 12px #c6f36a88; }
+    main { min-height:0; display:grid; grid-template-columns:350px 1fr; }
+    aside { padding:27px 22px; border-right:1px solid var(--line); background:var(--panel); overflow:auto; }
+    .eyebrow { color:var(--lime); text-transform:uppercase; letter-spacing:.14em; font-size:10px; font-weight:750; }
+    h1 { margin:8px 0 5px; font-size:28px; line-height:1.15; letter-spacing:-.05em; }
+    .sub { color:var(--muted); margin:0 0 23px; font-size:13px; }
+    .search { display:flex; align-items:center; gap:10px; height:44px; padding:0 13px; border:1px solid var(--line); border-radius:11px; background:#111612; color:var(--muted); }
+    .search input { width:100%; background:none; border:0; outline:0; color:var(--text); font:inherit; }
+    .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0 25px; }
+    .stat { padding:14px; border:1px solid var(--line); border-radius:12px; background:#141a15; }
+    .stat strong { display:block; font-size:23px; letter-spacing:-.04em; }.stat span { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+    .section-title { display:flex; align-items:center; justify-content:space-between; padding-bottom:11px; border-bottom:1px solid var(--line); font-size:13px; font-weight:700; }
+    .refresh { border:0; background:none; color:var(--lime); font:inherit; cursor:pointer; font-size:12px; }
+    #vehicle-list { display:grid; gap:9px; padding-top:12px; }
+    .vehicle { width:100%; display:flex; gap:12px; align-items:center; padding:12px; text-align:left; color:var(--text); border:1px solid transparent; border-radius:12px; background:#1c241e; cursor:pointer; }
+    .vehicle:hover,.vehicle.active { border-color:#72894d; background:#202a21; }
+    .scooter-icon { flex:0 0 36px; height:36px; display:grid; place-items:center; color:var(--lime); background:#2a3826; border-radius:10px; font-size:18px; }
+    .v-info { min-width:0; flex:1; }.v-name { font-size:13px; font-weight:650; }.v-meta { margin-top:3px; color:var(--muted); font-size:11px; }
+    .range { color:var(--lime); font-size:11px; white-space:nowrap; }
+    .note { margin-top:22px; padding:12px; border:1px solid #39442f; border-radius:11px; color:#b6c0b7; background:#1a2118; font-size:11px; }
+    .map-wrap { position:relative; min-height:500px; background:#d9dfd5; } #map { position:absolute; inset:0; }
+    .map-card { position:absolute; z-index:400; top:18px; left:18px; padding:11px 14px; border:1px solid #ffffff20; border-radius:12px; background:#141a15ed; box-shadow:0 6px 24px #0003; }
+    .map-card strong { display:block; font-size:13px; }.map-card span { display:block; margin-top:2px; color:#aeb8ae; font-size:11px; }
+    .map-legend { position:absolute; z-index:400; right:18px; bottom:25px; padding:10px 13px; border:1px solid #ffffff20; border-radius:10px; background:#141a15ed; color:#d5ddd5; font-size:11px; }
+    .marker { width:34px;height:34px;display:grid;place-items:center;border:2px solid #f2f7e8;border-radius:50% 50% 50% 7px;transform:rotate(-45deg);background:#c6f36a;color:#17200e;box-shadow:0 3px 10px #0004; }
+    .marker span { transform:rotate(45deg);font-size:16px; }
+    .empty { padding:16px 4px; color:var(--muted); font-size:12px; }
+    @media(max-width:800px) { .app { grid-template-rows:64px 1fr; } header { padding:0 17px; }.top-right { gap:8px; }.top-right .hint { display:none; } main { grid-template-columns:1fr; grid-template-rows:minmax(300px,48vh) auto; } .map-wrap { grid-row:1; min-height:300px; } aside { grid-row:2; border-right:0; border-top:1px solid var(--line); padding:21px 17px 28px; } h1 { font-size:24px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand"><div class="logo">↗</div> glide</div>
+      <div class="top-right"><span class="hint">Livefordon från</span><strong>Dott</strong><span class="live"><i class="dot"></i> GBFS live</span></div>
+    </header>
+    <main>
+      <aside>
+        <div class="eyebrow">Mikromobilitet · Sverige</div>
+        <h1>Hitta din scooter.</h1>
+        <p class="sub">Tillgängliga fordon nära dig, uppdaterade från operatörens dataflöde.</p>
+        <label class="search">⌕ <input id="filter" type="search" placeholder="Sök fordons-ID"></label>
+        <div class="stats"><div class="stat"><strong id="count">—</strong><span>fordon på kartan</span></div><div class="stat"><strong id="freshness">—</strong><span>senaste uppdatering</span></div></div>
+        <div class="section-title"><span>Tillgängliga fordon</span><button class="refresh" id="refresh">Uppdatera ↻</button></div>
+        <div id="vehicle-list"><div class="empty">Hämtar fordonsdata…</div></div>
+        <div class="note">Det här är en prototyp för att hitta fordon. Själva uthyrningen och upplåsningen kräver åtkomst från operatören.</div>
+      </aside>
+      <section class="map-wrap" aria-label="Karta över scootrar"><div id="map"></div><div class="map-card"><strong>Fordonskarta</strong><span id="map-status">Letar efter scootrar…</span></div><div class="map-legend">🛴 &nbsp; Tillgänglig scooter</div></section>
+    </main>
+  </div>
+  <script>
+    window.gm_authFailure = function() {
+      document.querySelector('#map-status').textContent = 'Google avvisade Maps-nyckeln. Kontrollera nyckelns API-behörighet.';
+    };
+    window.initMap = function() {
+    const map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 59.3293, lng: 18.0686 }, zoom: 12,
+      mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+      mapId: 'DEMO_MAP_ID', colorScheme: google.maps.ColorScheme.DARK
+    });
+    const markers = new Map();
+    let allVehicles = [];
+    const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const infoWindow = new google.maps.InfoWindow();
+    const markerIcon = { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: '#c6f36a', fillOpacity: 1, strokeColor: '#f2f7e8', strokeWeight: 3 };
+    function render() {
+      const query = document.querySelector('#filter').value.trim().toLowerCase();
+      const shown = allVehicles.filter(v => String(v.id).toLowerCase().includes(query) && !v.is_disabled && !v.is_reserved);
+      document.querySelector('#count').textContent = shown.length.toLocaleString('sv-SE');
+      document.querySelector('#map-status').textContent = shown.length ? `${shown.length} tillgängliga fordon` : 'Inga fordon hittades i filtret';
+      document.querySelector('#vehicle-list').innerHTML = shown.slice(0, 100).map(v => `<button class="vehicle" data-id="${esc(v.id)}"><span class="scooter-icon">🛴</span><span class="v-info"><span class="v-name">${esc(v.type || 'Elscooter')}</span><span class="v-meta">ID ${esc(v.id)}</span></span><span class="range">${v.battery ? `${(v.battery / 1000).toFixed(0)} km` : 'Redo'}</span></button>`).join('') || '<div class="empty">Inga fordon att visa just nu.</div>';
+      const visibleIds = new Set(shown.map(v => String(v.id)));
+      for (const [id, marker] of markers) if (!visibleIds.has(id)) { marker.setMap(null); markers.delete(id); }
+      shown.forEach(v => {
+        const id = String(v.id);
+        const position = { lat: v.lat, lng: v.lon };
+        if (markers.has(id)) markers.get(id).setPosition(position);
+        else {
+          const marker = new google.maps.Marker({ map, position, icon: markerIcon, title: `Elscooter ${id}` });
+          marker.addListener('click', () => { infoWindow.setContent(`<b>${esc(v.type || 'Elscooter')}</b><br>ID ${esc(id)}`); infoWindow.open({ map, anchor: marker }); });
+          markers.set(id, marker);
+        }
+      });
+      document.querySelectorAll('.vehicle').forEach(button => button.addEventListener('click', () => {
+        const marker = markers.get(button.dataset.id); if (marker) { map.panTo(marker.getPosition()); map.setZoom(16); google.maps.event.trigger(marker, 'click'); }
+      }));
+      if (shown.length && !window.didFit) { const bounds = new google.maps.LatLngBounds(); shown.forEach(v => bounds.extend({ lat: v.lat, lng: v.lon })); map.fitBounds(bounds, 50); window.didFit = true; }
+    }
+    async function load() {
+      document.querySelector('#map-status').textContent = 'Uppdaterar fordonsdata…';
+      try {
+        const response = await fetch('/api/vehicles');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Kunde inte läsa data');
+        allVehicles = data.vehicles || [];
+        document.querySelector('#freshness').textContent = data.updated ? new Date(data.updated * 1000).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit'}) : 'nu';
+        render();
+      } catch (error) {
+        document.querySelector('#vehicle-list').innerHTML = `<div class="empty">${esc(error.message)}<br>Kontrollera internetanslutningen och försök igen.</div>`;
+        document.querySelector('#map-status').textContent = 'Kunde inte hämta data';
+        document.querySelector('#count').textContent = '—';
+      }
+    }
+    document.querySelector('#filter').addEventListener('input', render);
+    document.querySelector('#refresh').addEventListener('click', load);
+    load();
+    setInterval(load, 60000);
+    };
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_API_KEY__&callback=initMap&loading=async" async defer></script>
+</body>
+</html>
