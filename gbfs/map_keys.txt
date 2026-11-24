@@ -1,0 +1,11 @@
+                                                                                                                                                                                                                      
+  Dott (dott/resources/res/values/strings.xml:492):                                                                                                                                                                   
+  google_maps_key = AIzaSyCnqn_cK2dL8NxCx2uq9UeAP71fnEFrPCo                                                                                                                                                           
+                                                                                                                                                                                                                      
+  Ryde (ryde/resources/res/values/strings.xml:212):                                                                                                                                                                   
+  google_maps_key = AIzaSyBNFtjnuBTZu5qHMg0fJlRR8abt7iN_x0k                                                                                                                                                           
+                                                                                                                                                                                                                      
+  Qick (qick/resources/AndroidManifest.xml:164 — Maps-metadata):                                                                                                                                                      
+  AIzaSyCQ33oTaThq7cNuqQj4SBhzFHqRZ9urQBk                                                                                                                                                                             
+  (nyckeln AIzaSyAaWvI_umolsEuLt4zd99z2_uSRqp5kUJA i strings.xml är Firebase/google_api_key, inte Maps)                                                                                                               
+                                                                            
