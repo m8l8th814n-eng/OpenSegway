@@ -1,21 +1,8 @@
 #!/usr/bin/env python3
-"""Generera omni_qr.csv at appen.
+"""Genererar omni_qr.csv med IMEI, QR-kod och MAC-adress."""
 
-Formatet ar framtaget ur OssUtils.parseQrFile() i den patchade APK:n:
-  - en rad per enhet
-  - komma-separerat, tre kolumner
-  - rader utan komma hoppas over (kan anvandas som kommentar)
-  - kolumn 0 (imei)   : sparas men anvands inte for uppslag
-  - kolumn 1 (qrcode) : UPPSLAGSNYCKELN - det du skriver i QR-faltet i appen
-  - kolumn 2 (mac)    : MAC-adressen appen ansluter till
-
-Kor:  python3 make_qr_csv.py > omni_qr.csv
-eller: python3 make_qr_csv.py --mac AA:BB:CC:DD:EE:FF --qr SC1
-"""
 import argparse
 import sys
-
-HEADER = "# imei,qrcode,mac  <- kolumn 2 ar uppslagsnyckeln du skriver i appen"
 
 
 def main():
@@ -29,7 +16,6 @@ def main():
         print(f"{a.imei},{a.qr},{a.mac}")
         return 0
 
-    # exempel: byt till dina enheters riktiga MAC-adresser
     rows = [
         ("SC1", "AA:BB:CC:00:00:01"),
         ("SEG1", "AA:BB:CC:00:00:02"),

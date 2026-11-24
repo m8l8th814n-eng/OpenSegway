@@ -1,23 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""nb_client.py - BLE-central som ansluter till fake_lock.py och kor kommandona.
 
-Testar hela kedjan utan telefon: skanna -> anslut -> prenumerera -> handskakning
-med deviceKey -> upplas. Samma protokoll som appen anvander.
+"""BLE-klient för Omni-lås. Kräver dbus-python och PyGObject."""
 
-Kor pa en ANNAN maskin an den som kor fake_lock.py (en adapter kan inte
-annonsera och skanna samtidigt pa ett tillforlitligt satt), eller pa en andra
-dongle pa samma maskin.
-
-  sudo python3 nb_client.py --name "Segway IoT"
-  sudo python3 nb_client.py --name "Segway IoT" --lock          # las i stallet
-  sudo python3 nb_client.py --name "Segway IoT" --all           # handskak + upplas + las + status
-"""
 import argparse
 import sys
 import time
 
-SVC_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 WRITE_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 NOTIFY_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
@@ -28,7 +16,7 @@ ORDER_INFO = 49
 ORDER_SCOOTER_INFO = 96
 ORDER_FW = 250
 
-# CRC8-tabellen ur APK:ns CRCUtil. Identisk med den i fake_lock.py.
+
 CRC8_TABLE = [
     0x00, 0x5E, 0xBC, 0xE2, 0x61, 0x3F, 0xDD, 0x83, 0xC2, 0x9C, 0x7E, 0x20, 0xA3, 0xFD, 0x1F, 0x41,
     0x9D, 0xC3, 0x21, 0x7F, 0xFC, 0xA2, 0x40, 0x1E, 0x5F, 0x01, 0xE3, 0xBD, 0x3E, 0x60, 0x82, 0xDC,
@@ -56,11 +44,16 @@ def crc8(data: bytes) -> int:
     return i
 
 
-def build(order: int, payload: bytes, session_key: int = 0x00, xor_key: int = 0x19) -> bytes:
-    """Bygg en A3A4-ram. Byte 4 ar kommunikationsnyckeln appen signerar med
-    (0 innan handskakningen, sessionsnyckeln efter)."""
-    dec = bytes([0xA3, 0xA4, len(payload) & 0xFF, xor_key, session_key & 0xFF,
-                 order & 0xFF]) + payload
+def build(
+    order: int, payload: bytes, session_key: int = 0x00, xor_key: int = 0x19
+) -> bytes:
+
+    dec = (
+        bytes(
+            [0xA3, 0xA4, len(payload) & 0xFF, xor_key, session_key & 0xFF, order & 0xFF]
+        )
+        + payload
+    )
     out = bytearray(dec)
     out[3] = (xor_key + 50) & 0xFF
     for k in range(4, len(out)):
@@ -69,7 +62,7 @@ def build(order: int, payload: bytes, session_key: int = 0x00, xor_key: int = 0x
 
 
 def parse(value: bytes):
-    """Avkoda en inkommande ram. Returnerar (order, dekodad ram) eller (None, orsak)."""
+
     i3 = 0
     i = 0
     while i3 < len(value):
@@ -79,7 +72,7 @@ def parse(value: bytes):
         i3 += 1
     if i == 0:
         return None, "ingen A3 A4-ram"
-    fr = value[i3:i3 + i]
+    fr = value[i3 : i3 + i]
     body = fr[:-1]
     if crc8(body) != fr[-1]:
         return None, f"CRC8 fel (beraknad {crc8(body):02X}, i ramen {fr[-1]:02X})"
@@ -92,11 +85,9 @@ def parse(value: bytes):
 
 
 def pump(seconds):
-    """Lat GLib-huvudloopen beta av inkommande D-Bus-signaler.
 
-    Utan detta levereras aldrig PropertiesChanged - hela notify-vagen - och
-    svaren fran periferin ser vi aldrig."""
     from gi.repository import GLib
+
     ctx = GLib.MainContext.default()
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -111,15 +102,15 @@ def key_payload(device_key: str) -> bytes:
 
 
 def open_payload(timestamp: int) -> bytes:
-    """getCRCScooterOpen(0, key, tid, 0): [1][i 4 byte][tid 4 byte][0]"""
-    return bytes([1]) + bytes(4) + timestamp.to_bytes(4, "big", signed=False) + bytes([0])
+
+    return (
+        bytes([1]) + bytes(4) + timestamp.to_bytes(4, "big", signed=False) + bytes([0])
+    )
 
 
-# ------------------------------------------------------------------ BLE-central
 def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
     import dbus
     import dbus.mainloop.glib
-    from gi.repository import GLib
 
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
@@ -127,18 +118,13 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
 
     aobj = bus.get_object("org.bluez", adapter_path)
     adapter_iface = dbus.Interface(aobj, "org.bluez.Adapter1")
-    gatt_obj = bus.get_object("org.bluez", adapter_path)
 
-    root = dbus.Interface(bus.get_object("org.bluez", "/"),
-                          "org.freedesktop.DBus.ObjectManager")
-
-    def props_of(path, iface):
-        o = bus.get_object("org.bluez", path)
-        return dbus.Interface(o, "org.freedesktop.DBus.Properties").GetAll(iface)
+    root = dbus.Interface(
+        bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager"
+    )
 
     print(f"[1] letar efter {name!r} pa {adapter} ...")
-    # Ingen SetDiscoveryFilter: BlueZ 5.87 avvisar "Transports" med InvalidArguments.
-    # StartDiscovery utan filter hittar LE-enheterna anda.
+
     try:
         adapter_iface.SetDiscoveryFilter({"Transport": "le"})
     except dbus.exceptions.DBusException as e:
@@ -182,7 +168,7 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         obj = bus.get_object("org.bluez", path)
         d = dbus.Interface(obj, "org.bluez.Device1")
         pr = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
-        # LE-periferi: tvinga adresstyp sa BlueZ inte forsoker BR/EDR
+
         for at in ("public", "random"):
             try:
                 pr.Set("org.bluez.Device1", "AddressType", at)
@@ -200,9 +186,7 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         nm = e.get_dbus_name()
         print(f"    misslyckades: {nm}")
         if "page-timeout" in str(e) or "Failed" in nm or "key-missing" in str(e):
-            # Vanligaste orsaken: enheten annonserar inte over LE just nu, eller sa
-            # valde BlueZ BR/EDR. Vi ror INTE parningen - vi skannar om med LE-filter
-            # och forsoker igen.
+
             print("    skannar om med LE-filter och forsoker igen ...")
             try:
                 adapter_iface.SetDiscoveryFilter({"Transport": "le"})
@@ -236,12 +220,13 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
                 dev = try_connect(dev_path, "forsok 2")
             except dbus.exceptions.DBusException as e2:
                 print(f"    misslyckades igen: {e2.get_dbus_name()}")
-                print("    Kontrollera att fake_lock visar '[4] annonserar' och ar i rakvidd.")
+                print(
+                    "    Kontrollera att fake_lock visar '[4] annonserar' och ar i rakvidd."
+                )
                 return 1
     if dev is None:
         return 1
 
-    # vanta pa GATT-tjansterna
     write_path = notify_path = None
     deadline = time.time() + 15
     while time.time() < deadline and (write_path is None or notify_path is None):
@@ -250,9 +235,9 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
                 continue
             p = ifaces["org.bluez.GattCharacteristic1"]
             u = str(p.get("UUID", "")).lower()
-            if u == write_uuid_ok(WRITE_UUID):
+            if u == WRITE_UUID:
                 write_path = str(path)
-            elif u == write_uuid_ok(NOTIFY_UUID):
+            elif u == NOTIFY_UUID:
                 notify_path = str(path)
         if write_path is None or notify_path is None:
             pump(0.5)
@@ -262,10 +247,12 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         return 1
 
     print("[3] prenumererar pa notify")
-    notify = dbus.Interface(bus.get_object("org.bluez", notify_path),
-                            "org.bluez.GattCharacteristic1")
-    write = dbus.Interface(bus.get_object("org.bluez", write_path),
-                           "org.bluez.GattCharacteristic1")
+    notify = dbus.Interface(
+        bus.get_object("org.bluez", notify_path), "org.bluez.GattCharacteristic1"
+    )
+    write = dbus.Interface(
+        bus.get_object("org.bluez", write_path), "org.bluez.GattCharacteristic1"
+    )
 
     inbox = []
 
@@ -275,10 +262,12 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
         if "Value" in changed:
             inbox.append(bytes(bytearray(changed["Value"])))
 
-    bus.add_signal_receiver(on_props_changed,
-                            dbus_interface="org.freedesktop.DBus.Properties",
-                            signal_name="PropertiesChanged",
-                            path=notify_path)
+    bus.add_signal_receiver(
+        on_props_changed,
+        dbus_interface="org.freedesktop.DBus.Properties",
+        signal_name="PropertiesChanged",
+        path=notify_path,
+    )
     notify.StartNotify()
     pump(0.5)
 
@@ -287,7 +276,9 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
     def send(order, payload, label):
         frame = build(order, payload, session["key"])
         print(f"    -> skickar order={order} ({label}) {frame.hex()}")
-        write.WriteValue(dbus.Array(frame, signature="y"), dbus.Dictionary({}, signature="sv"))
+        write.WriteValue(
+            dbus.Array(frame, signature="y"), dbus.Dictionary({}, signature="sv")
+        )
         deadline = time.time() + reply_timeout
         while time.time() < deadline:
             while inbox:
@@ -297,9 +288,11 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
                     print(f"       <svar som inte gick att avkoda: {dec}>")
                     continue
                 ln = dec[2]
-                pl = dec[6:6 + ln]
-                print(f"       <- svar order={o} status={dec[6]} nyckel=0x{dec[4]:02X} "
-                      f"payload={pl.hex()}")
+                pl = dec[6 : 6 + ln]
+                print(
+                    f"       <- svar order={o} status={dec[6]} nyckel=0x{dec[4]:02X} "
+                    f"payload={pl.hex()}"
+                )
                 return o, dec
             pump(0.05)
         print(f"       (inget svar inom {reply_timeout}s)")
@@ -338,10 +331,6 @@ def run(name, device_key, adapter, actions, scan_timeout, reply_timeout):
     return 0
 
 
-def write_uuid_ok(u):
-    return u.lower()
-
-
 def main():
     ap = argparse.ArgumentParser(description="BLE-central mot fake_lock.py")
     ap.add_argument("--name", default="Segway IoT", help="enhetens annonserade namn")
@@ -349,9 +338,14 @@ def main():
     ap.add_argument("--adapter", default="hci0")
     ap.add_argument("--scan-timeout", type=float, default=20.0)
     ap.add_argument("--reply-timeout", type=float, default=5.0)
-    ap.add_argument("--lock", action="store_true", help="las i stallet for att lasa upp")
-    ap.add_argument("--all", action="store_true",
-                    help="handskakning + upplas + las + fordonsinfo + status")
+    ap.add_argument(
+        "--lock", action="store_true", help="las i stallet for att lasa upp"
+    )
+    ap.add_argument(
+        "--all",
+        action="store_true",
+        help="handskakning + upplas + las + fordonsinfo + status",
+    )
     a = ap.parse_args()
 
     if a.all:
@@ -362,13 +356,12 @@ def main():
         actions = ["unlock"]
 
     try:
-        import dbus  # noqa: F401
-        from gi.repository import GLib  # noqa: F401
+        return run(a.name, a.key, a.adapter, actions, a.scan_timeout, a.reply_timeout)
     except ImportError:
-        sys.exit("saknar dbus-python/PyGObject. Paket: python3-dbus python3-gi\n"
-                 "Kor med systemets python3.")
-
-    return run(a.name, a.key, a.adapter, actions, a.scan_timeout, a.reply_timeout)
+        sys.exit(
+            "saknar dbus-python/PyGObject. Paket: python3-dbus python3-gi\n"
+            "Kor med systemets python3."
+        )
 
 
 if __name__ == "__main__":

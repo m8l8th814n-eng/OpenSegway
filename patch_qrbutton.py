@@ -1,36 +1,35 @@
-"""Injecterar appendQrRow-hjalpen och kopplar QR-knappen till den.
+"""Kopplar QR-knappen till appendQrRow i ULockTestActivity."""
 
-Ligger i egen fil for att undvika citeringskrockar i patch_offline.py.
-Anropas fran patch_offline.py:s main.
-"""
 import os
 
-HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "appendQrRow.smali")
+HELPER = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "assets", "appendQrRow.smali"
+)
 
 OLD_COND3 = (
-    '    :cond_3\n'
-    '    iget-object p1, p0, Lcom/omni/production/check/activity/ULockTestActivity;->dialogUtils:'
-    'Lcom/omni/production/check/utils/DialogUtils;\n\n'
-    '    const p2, 0x7f0f010e\n\n'
-    '    invoke-virtual {p0, p2}, Lcom/omni/production/check/activity/ULockTestActivity;->'
-    'getString(I)Ljava/lang/String;\n\n'
-    '    move-result-object p2\n\n'
-    '    invoke-virtual {p1, p2}, Lcom/omni/production/check/utils/DialogUtils;->'
-    'showHint(Ljava/lang/String;)V\n'
+    "    :cond_3\n"
+    "    iget-object p1, p0, Lcom/omni/production/check/activity/ULockTestActivity;->dialogUtils:"
+    "Lcom/omni/production/check/utils/DialogUtils;\n\n"
+    "    const p2, 0x7f0f010e\n\n"
+    "    invoke-virtual {p0, p2}, Lcom/omni/production/check/activity/ULockTestActivity;->"
+    "getString(I)Ljava/lang/String;\n\n"
+    "    move-result-object p2\n\n"
+    "    invoke-virtual {p1, p2}, Lcom/omni/production/check/utils/DialogUtils;->"
+    "showHint(Ljava/lang/String;)V\n"
 )
 
 NEW_COND3 = (
-    '    :cond_3\n'
-    '    iget-object p1, p0, Lcom/omni/production/check/activity/ULockTestActivity;->'
-    'etScanMac:Landroid/widget/EditText;\n\n'
-    '    invoke-virtual {p1}, Landroid/widget/EditText;->getText()Landroid/text/Editable;\n\n'
-    '    move-result-object p1\n\n'
-    '    invoke-virtual {p1}, Ljava/lang/Object;->toString()Ljava/lang/String;\n\n'
-    '    move-result-object p1\n\n'
-    '    invoke-virtual {p1}, Ljava/lang/String;->trim()Ljava/lang/String;\n\n'
-    '    move-result-object p1\n\n'
-    '    invoke-direct {p0, p2, p1}, Lcom/omni/production/check/activity/ULockTestActivity;->'
-    'appendQrRow(Ljava/lang/String;Ljava/lang/String;)V\n'
+    "    :cond_3\n"
+    "    iget-object p1, p0, Lcom/omni/production/check/activity/ULockTestActivity;->"
+    "etScanMac:Landroid/widget/EditText;\n\n"
+    "    invoke-virtual {p1}, Landroid/widget/EditText;->getText()Landroid/text/Editable;\n\n"
+    "    move-result-object p1\n\n"
+    "    invoke-virtual {p1}, Ljava/lang/Object;->toString()Ljava/lang/String;\n\n"
+    "    move-result-object p1\n\n"
+    "    invoke-virtual {p1}, Ljava/lang/String;->trim()Ljava/lang/String;\n\n"
+    "    move-result-object p1\n\n"
+    "    invoke-direct {p0, p2, p1}, Lcom/omni/production/check/activity/ULockTestActivity;->"
+    "appendQrRow(Ljava/lang/String;Ljava/lang/String;)V\n"
 )
 
 OLD_STR = '<string name="tool_scan_qr">Scan QR_Code</string>'
