@@ -1,0 +1,142 @@
+This is a hobby project, provided as-is under the MIT License. Use at your own risk.
+Detections, pattern matches, “Moving with you” / “possible tail,” Debrief text, and AI Export are hypotheses — not identity, not a legal finding, and not a complete RF capture. Radios that are off, asleep, randomized, cellular-only, or hidden by the OS will not appear.
+You are solely responsible for how you use this app and for following local law. To the maximum extent permitted by law, Off Grid Pete LLC is not liable for indirect, incidental, special, consequential, or punitive damages arising from its use.
+GPS stamps are this phone at hear-time, not the other radio, unless a decode map advertises its own latitude/longitude (Remote ID Location). Sharing a Debrief, sit compare, AI Export (sit or one radio), radio-detail Share as text, or log can take that path off the device. A TAK/CoT feed, when you turn it on, sends markers onto the LAN; that is on the operator.
+Do not use Fieldwatch, this paste, or your analysis in any situation where safety is in question.
+This is a hobby project, provided as-is under the MIT License. Use at your own risk.
+Detections, pattern matches, “Moving with you” / “possible tail,” Debrief text, and AI Export are hypotheses — not identity, not a legal finding, and not a complete RF capture. Radios that are off, asleep, randomized, cellular-only, or hidden by the OS will not appear.
+You are solely responsible for how you use this app and for following local law. To the maximum extent permitted by law, Off Grid Pete LLC is not liable for indirect, incidental, special, consequential, or punitive damages arising from its use.
+GPS stamps are this phone at hear-time, not the other radio, unless a decode map advertises its own latitude/longitude (Remote ID Location). Sharing a Debrief, sit compare, AI Export (sit or one radio), radio-detail Share as text, or log can take that path off the device. A TAK/CoT feed, when you turn it on, sends markers onto the LAN; that is on the operator.
+Do not use Fieldwatch, this paste, or your analysis in any situation where safety is in question.
+
+## 1. What it likely is
+
+**Most likely: a scooter-related embedded BLE peripheral, probably an app-connectable control, telemetry, configuration, or diagnostic interface.**
+
+- **Product-class confidence: 85/100.**
+- **Brand or model confidence: below 10/100.** No particular scooter brand or model is defensible from this dump.
+
+Evidence:
+
+- The complete local name is **`Scooter1`**, encoded as `53 63 6F 6F 74 65 72 31`. This is the strongest product-class clue, but names are firmware-defined and can be generic, customized, or spoofed.
+- **Connectable: Yes** and Flags **`0x06`** indicate a generally discoverable BLE peripheral that accepts connections, rather than merely a non-connectable beacon.
+- The sole advertised service is the vendor-specific 128-bit UUID **`86531001-43E6-47B7-9CB0-5FC21D4AE340`**, consistent with a proprietary application interface.
+- Manufacturer data uses Bluetooth company ID **`0x04F7`**, decoded by Fieldwatch as **Shenzhen Goodix Technology Co., Ltd.** Goodix is a component/platform supplier, not evidence of a scooter brand.
+- Goodix produces general-purpose BLE SoCs for embedded products; for example, its GR551x family supports peripheral and broadcaster roles for IoT and wearable devices. Nothing in this packet establishes that this particular radio uses a GR551x chip.
+- There is **no Appearance, model string, standard device-type service, or recognized tracker format** to refine the identification.
+
+Competing hypotheses:
+
+1. A scooter’s main controller, dashboard, or add-on BLE module — best fit.
+2. A development board, diagnostic accessory, or another embedded product deliberately named `Scooter1`.
+3. A generic Goodix-based IoT peripheral with a misleading or user-assigned name.
+
+A standalone tracker is **not supported by the observed formats**, even though Goodix silicon can be used in many kinds of products.
+
+## 2. Registry / format decode
+
+The raw advertisement separates into these GAP advertising structures:
+
+| Raw bytes | Decode |
+| --- | --- |
+| `02 01 06` | **Flags**, value `0x06`: LE General Discoverable Mode and BR/EDR Not Supported. Thus BLE-only, not proof that the host product lacks Wi-Fi or cellular. |
+| `11 07 40 E3 4A 1D C2 5F B0 9C B7 47 E6 43 01 10 53 86` | AD type `0x07`: complete list of 128-bit service UUIDs. Reversing the on-air byte order gives **`86531001-43E6-47B7-9CB0-5FC21D4AE340`**. This is a custom UUID, not a Bluetooth SIG 16-bit service assignment. |
+| `09 FF F7 04 56 A9 20 83 58 DB` | AD type `0xFF`: Manufacturer Specific Data. `F7 04` is little-endian company ID **`0x04F7`**, assigned in the Bluetooth SIG company-identifier registry to Shenzhen Goodix Technology Co., Ltd., as shown in the dump. |
+| `0F 09 53 63 6F 6F 74 65 72 31 00 00 00 00 00 00` | AD type `0x09`: Complete Local Name **`Scooter1`**, followed by zero padding. |
+
+Additional registry results:
+
+- **IEEE OUI/CID:** none can be derived. `DB:58:83:20:A9:56` is not an IEEE factory-assigned public address, so an OUI lookup would be invalid.
+- **BLE address pattern:** the leading octet `DB` has its two most significant bits set (`11`), consistent with the BLE **static-random address** format. The local bit reported by Fieldwatch agrees that this is not a factory OUI address.
+- **Manufacturer payload:** `56 A9 20 83 58 DB` is exactly the advertised address in reverse byte order: `DB:58:83:20:A9:56`. It therefore looks like a firmware-generated address echo, **not an independent serial number**.
+- **GAP Appearance:** absent; there is no AD type `0x19`.
+- **16-bit service UUIDs:** none advertised.
+- **iBeacon:** absent. There is no Apple company ID `0x004C` followed by the iBeacon `02 15` structure, so no proximity UUID, major, or minor exists to decode.
+- **Apple Continuity / Find My:** absent; no Apple `0x004C` manufacturer payload or recognizable Continuity type.
+- **Google Fast Pair:** absent; no `0xFE2C` service data or three-byte Fast Pair model ID.
+- **Eddystone:** absent; no `0xFEAA` service.
+- **Microsoft manufacturer format:** absent; company ID is `0x04F7`, not Microsoft’s `0x0006`.
+
+The custom service UUID has no reliable public product association established by this observation.
+
+## 3. What that product typically does
+
+A scooter BLE peripheral commonly provides a phone application with some combination of:
+
+- connection and pairing;
+- scooter status or telemetry;
+- configuration and control functions;
+- diagnostics;
+- firmware update or vendor-specific commands.
+
+The advertisement alone does **not** reveal which of these functions this service implements.
+
+Its radio behavior is consistent with a **connectable, discoverable application peripheral**. Such devices may advertise continuously while awake, only during pairing, or intermittently according to power state. The two observed presence windows are insufficient to determine its general advertising duty cycle.
+
+## 4. What Fieldwatch actually saw vs what it cannot see
+
+Fieldwatch saw what stock Android exposed for **one BLE advertiser**:
+
+- its address and advertised name;
+- connectability, discoverability, LE 1M PHY, and one advertising-channel observation at **2402 MHz**—BLE advertising channel 37;
+- Flags, one custom 128-bit service UUID, and Goodix manufacturer data;
+- receive times and phone-measured RSSI;
+- the operator phone’s GPS fixes at hear-time.
+
+It did **not** establish:
+
+- a connection, pairing, or any GATT characteristic contents;
+- a model, serial number, firmware version, owner, or account;
+- activity on the other BLE advertising channels;
+- Wi-Fi stations, associated clients, or probe requests;
+- cellular transmissions;
+- direction, angle of arrival, or an independent location for the advertiser.
+
+Although the collection context says **“Randomized MAC flag: no,”** the address format is still consistent with a static-random BLE address. It remained usable as a session identifier here, but its behavior across reboots or longer periods is unknown. If it changes, the address alone will not stitch observations together.
+
+## 5. Signal and presence
+
+- **Signal:** consistently quiet/weak at the phone. Last heard was **−90 dBm**, with a session range of **−99 to −90 dBm**. Most recent samples cluster around **−90 to −97 dBm**.
+- **Session:** first seen **12:34:46**, last seen **12:40:10**, spanning **5 minutes 24 seconds**, with **30 hits**.
+- **Presence windows:** **12:34:46–12:38:32**, followed by one observed hit at **12:40:10**.
+- **Gone:** `true` at the detail-page time, consistent with no further observation after the configured stale interval.
+- **Location:** the last fix and listed places belong to the **operator phone**. They do not locate this radio or demonstrate that it moved between those places.
+
+No distance estimate is justified from these RSSI values.
+
+## 6. Signature match
+
+No signature match, Notes, or Extra attention entry is present in the dump.
+
+The payload does support a **custom Goodix-based embedded peripheral** hypothesis:
+
+- company ID `0x04F7`;
+- proprietary 128-bit service;
+- manufacturer payload echoing the address;
+- product-like local name `Scooter1`.
+
+It does **not** additionally support an iBeacon, Apple Continuity/Find My, Fast Pair, or Eddystone family classification. The Goodix company ID by itself is not a tracker signature.
+
+## 7. Open questions
+
+The most useful additional evidence would be:
+
+1. **A documented advertisement from a known scooter model or vendor app/firmware** containing the same service UUID. A byte-for-byte match would materially raise model confidence.
+2. **Complete passive captures of advertisements and scan responses on all three BLE advertising channels**, looking for Appearance, model strings, additional services, or changing payloads.
+3. **A GATT service/characteristic listing from an independently available app or authorized connection**, especially Device Information Service `0x180A` values. None is present in this capture.
+4. **Repeated observations across power cycles**, showing whether the address, reversed-address payload, name, and UUID remain unchanged.
+5. **Controlled correlation with a known product’s awake/asleep state.** Matching advertisement presence to that state would support the product-class hypothesis without proving identity.
+
+More phone GPS samples would mainly document the receiver’s path; they would not, by themselves, identify or locate the advertiser.
+
+## 8. Must not conclude
+
+This dump does **not** support:
+
+- an owner, person, vehicle, or legal identity;
+- a specific scooter brand, model, or serial number;
+- that a tracker is present;
+- that the radio followed anyone;
+- an independent GPS location, direction, or measured distance for the radio.
+
+**Takeaway: This is most likely an app-connectable, scooter-related custom BLE peripheral; next compare its custom service UUID and full advertisement with a known scooter-model or vendor sample.**
