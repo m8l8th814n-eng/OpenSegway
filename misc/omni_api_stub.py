@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""omni_api_stub.py - egen server som ersatter scootercracking.duckdns.org.
+"""omni_api_stub.py - 
 
 Svarar pa ALLA endpoints som BleTool-appen anropar (kartlagda ur
 work/jadxout/.../network/ApiService.java 2026-10-20) med valformad JSON i
